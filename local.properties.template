@@ -1,0 +1,13 @@
+## This file must *NOT* be checked into Version Control Systems,
+# as it contains information specific to your local configuration.
+#
+# Location of the SDK. This is only used by Gradle.
+# For customization when using a Version Control System, please read the
+# header note.
+#sdk.dir=/path/to/your/android/sdk
+
+# Mapbox access token (required)
+MAPBOX_ACCESS_TOKEN=your_mapbox_access_token_here
+
+# Mapbox downloads token (required for Maven repository access)
+MAPBOX_DOWNLOADS_TOKEN=your_mapbox_downloads_token_here
