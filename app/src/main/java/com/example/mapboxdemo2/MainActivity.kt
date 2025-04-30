@@ -15,10 +15,9 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.example.mapboxdemo2.BuildConfig
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.snackbar.Snackbar
-import com.mapbox.android.core.permissions.PermissionsListener
-import com.mapbox.android.core.permissions.PermissionsManager
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.MapView
@@ -28,7 +27,6 @@ import com.mapbox.maps.plugin.animation.MapAnimationOptions
 import com.mapbox.maps.plugin.animation.camera
 import com.mapbox.maps.plugin.locationcomponent.LocationComponentPlugin
 import com.mapbox.maps.plugin.locationcomponent.location
-import com.mapbox.search.ApiType
 import com.mapbox.search.SearchEngine
 import com.mapbox.search.SearchEngineSettings
 import com.mapbox.search.SearchOptions
@@ -43,7 +41,7 @@ import com.mapbox.search.ui.view.SearchResultsView
 import com.mapbox.search.ui.view.place.SearchPlaceBottomSheet
 import com.mapbox.search.ui.view.place.SearchPlaceBottomSheetConfiguration
 
-class MainActivity : AppCompatActivity(), PermissionsListener {
+class MainActivity : AppCompatActivity() {
 
     private lateinit var mapView: MapView
     private lateinit var searchEditText: EditText
@@ -52,7 +50,6 @@ class MainActivity : AppCompatActivity(), PermissionsListener {
     private lateinit var zoomOutButton: FloatingActionButton
     private lateinit var myLocationButton: FloatingActionButton
     
-    private lateinit var permissionsManager: PermissionsManager
     private lateinit var searchEngine: SearchEngine
     private var searchRequestTask: SearchRequestTask? = null
     
@@ -72,10 +69,9 @@ class MainActivity : AppCompatActivity(), PermissionsListener {
         zoomOutButton = findViewById(R.id.zoomOutButton)
         myLocationButton = findViewById(R.id.myLocationButton)
         
-        // Initialize Mapbox Search
-        val accessToken = getString(R.string.mapbox_access_token)
-        searchEngine = SearchEngine.createSearchEngineWithBuiltInDataProviders(
-            SearchEngineSettings(accessToken, ApiType.GEOCODING)
+        // Initialize Mapbox Search with v2.9.0 API
+        searchEngine = SearchEngine.createSearchEngine(
+            SearchEngineSettings(BuildConfig.MAPBOX_ACCESS_TOKEN)
         )
         
         // Initialize map with Japanese language
@@ -94,7 +90,7 @@ class MainActivity : AppCompatActivity(), PermissionsListener {
             object : Style.OnStyleLoaded {
                 override fun onStyleLoaded(style: Style) {
                     // Map style has been loaded, now we can add location component
-                    if (PermissionsManager.areLocationPermissionsGranted(this@MainActivity)) {
+                    if (checkLocationPermission()) {
                         enableLocationComponent()
                     } else {
                         requestLocationPermission()
@@ -102,6 +98,13 @@ class MainActivity : AppCompatActivity(), PermissionsListener {
                 }
             }
         )
+    }
+    
+    private fun checkLocationPermission(): Boolean {
+        return ActivityCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
     }
     
     private fun setupButtonListeners() {
@@ -127,7 +130,7 @@ class MainActivity : AppCompatActivity(), PermissionsListener {
         
         // My location button
         myLocationButton.setOnClickListener {
-            if (PermissionsManager.areLocationPermissionsGranted(this)) {
+            if (checkLocationPermission()) {
                 val locationComponentPlugin = mapView.location
                 locationComponentPlugin.getLastKnownLocation()?.let { location ->
                     val point = Point.fromLngLat(location.longitude, location.latitude)
@@ -166,7 +169,7 @@ class MainActivity : AppCompatActivity(), PermissionsListener {
         searchRequestTask?.cancel()
         
         // Get current map center or user location for search context
-        val centerPoint = if (PermissionsManager.areLocationPermissionsGranted(this)) {
+        val centerPoint = if (checkLocationPermission()) {
             mapView.location.getLastKnownLocation()?.let {
                 Point.fromLngLat(it.longitude, it.latitude)
             } ?: mapView.getMapboxMap().cameraState.center
@@ -289,8 +292,11 @@ class MainActivity : AppCompatActivity(), PermissionsListener {
     }
     
     private fun requestLocationPermission() {
-        permissionsManager = PermissionsManager(this)
-        permissionsManager.requestLocationPermissions(this)
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+            LOCATION_PERMISSION_REQUEST_CODE
+        )
     }
     
     override fun onRequestPermissionsResult(
@@ -299,40 +305,46 @@ class MainActivity : AppCompatActivity(), PermissionsListener {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        permissionsManager.onRequestPermissionsResult(requestCode, permissions, grantResults)
-    }
-    
-    override fun onExplanationNeeded(permissionsToExplain: List<String>) {
-        Toast.makeText(
-            this,
-            R.string.permission_rationale,
-            Toast.LENGTH_LONG
-        ).show()
-    }
-    
-    override fun onPermissionResult(granted: Boolean) {
-        if (granted) {
-            enableLocationComponent()
-        } else {
-            val snackbar = Snackbar.make(
-                mapView,
-                R.string.permission_denied_explanation,
-                Snackbar.LENGTH_INDEFINITE
-            )
-            snackbar.setAction(R.string.settings) {
-                // Build intent that displays the App settings screen
-                val intent = Intent()
-                intent.action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
-                val uri = Uri.fromParts(
-                    "package",
-                    packageName,
-                    null
-                )
-                intent.data = uri
-                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                startActivity(intent)
+        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Permission granted
+                enableLocationComponent()
+            } else {
+                // Permission denied
+                if (ActivityCompat.shouldShowRequestPermissionRationale(
+                        this,
+                        Manifest.permission.ACCESS_FINE_LOCATION
+                    )
+                ) {
+                    // Show rationale
+                    Toast.makeText(
+                        this,
+                        R.string.permission_rationale,
+                        Toast.LENGTH_LONG
+                    ).show()
+                } else {
+                    // User denied with "don't ask again", show settings dialog
+                    val snackbar = Snackbar.make(
+                        mapView,
+                        R.string.permission_denied_explanation,
+                        Snackbar.LENGTH_INDEFINITE
+                    )
+                    snackbar.setAction(R.string.settings) {
+                        // Build intent that displays the App settings screen
+                        val intent = Intent()
+                        intent.action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+                        val uri = Uri.fromParts(
+                            "package",
+                            packageName,
+                            null
+                        )
+                        intent.data = uri
+                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        startActivity(intent)
+                    }
+                    snackbar.show()
+                }
             }
-            snackbar.show()
         }
     }
     
