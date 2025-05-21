@@ -1,6 +1,5 @@
 <resources>
     <string name="app_name">Mapbox Demo 2</string>
-    <string name="mapbox_access_token">YOUR_MAPBOX_ACCESS_TOKEN</string>
     <string name="search_hint">Search for places...</string>
     <string name="permission_rationale">Location permission is needed to show your current location on the map</string>
     <string name="permission_denied_explanation">You have denied location permissions. Please enable them in app settings.</string>
@@ -8,4 +7,7 @@
     <string name="zoom_in">Zoom In</string>
     <string name="zoom_out">Zoom Out</string>
     <string name="my_location">My Location</string>
+    <string name="mapbox_access_token" translatable="false">
+    pk.eyJ1IjoiYmxpdHotayIsImEiOiJjbTl0eGR6YmcwMzVkMmxzOTQ1dmdudzFoIn0.7AjPzzk6rU6SZA85mM3UrQ
+</string>
 </resources>
