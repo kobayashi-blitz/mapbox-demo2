@@ -7,6 +7,7 @@
     <string name="zoom_in">Zoom In</string>
     <string name="zoom_out">Zoom Out</string>
     <string name="my_location">My Location</string>
+    <string name="search_menu">Search Menu</string>
     <string name="mapbox_access_token" translatable="false">
     pk.eyJ1IjoiYmxpdHotayIsImEiOiJjbTl0eGR6YmcwMzVkMmxzOTQ1dmdudzFoIn0.7AjPzzk6rU6SZA85mM3UrQ
 </string>

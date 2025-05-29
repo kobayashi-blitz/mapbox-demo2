@@ -7,4 +7,5 @@
     <string name="zoom_in">拡大</string>
     <string name="zoom_out">縮小</string>
     <string name="my_location">現在地</string>
+    <string name="search_menu">検索メニュー</string>
 </resources>

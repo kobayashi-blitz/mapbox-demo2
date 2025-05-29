@@ -19,58 +19,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- Search bar at the top of the screen -->
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/searchCardView"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        app:cardCornerRadius="8dp"
-        app:cardElevation="4dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <EditText
-                android:id="@+id/searchEditText"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
-                android:background="@null"
-                android:hint="@string/search_hint"
-                android:imeOptions="actionSearch"
-                android:inputType="text"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:singleLine="true" />
-
-            <ImageButton
-                android:id="@+id/clearButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Clear text"
-                android:src="@drawable/ic_text_cancel"
-                android:alpha="0.5"
-                android:visibility="gone" />
-
-            <ImageButton
-                android:id="@+id/searchButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Search"
-                android:src="@android:drawable/ic_menu_search" />
-
-
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
-
     <!-- Vertical FABs for zoom and location controls -->
     <LinearLayout
         android:id="@+id/controlsLayout"
@@ -108,5 +56,16 @@
             app:srcCompat="@android:drawable/ic_menu_mylocation" />
     </LinearLayout>
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+    <ImageButton
+        android:id="@+id/showSearchDialogButton"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:src="@drawable/location_menu_search"
+        android:background="@android:color/transparent"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="220dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        android:contentDescription="@string/search_menu" />
 
+</androidx.constraintlayout.widget.ConstraintLayout>
