@@ -8,4 +8,5 @@
     <string name="zoom_out">縮小</string>
     <string name="my_location">現在地</string>
     <string name="search_menu">検索メニュー</string>
+    <string name="no_notifications">通知はありません</string>
 </resources>
