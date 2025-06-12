@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!-- 回転するアイコン円 -->
+<com.example.mapboxdemo2.ui.InterceptFrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/circleContainer"
+    android:layout_width="300dp"
+    android:layout_height="300dp"
+    android:layout_gravity="bottom|end"
+    android:layout_marginEnd="-120dp"
+    android:layout_marginBottom="-70dp"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:clickable="true"
+    android:focusable="true"
+    app:layout_constraintBottom_toBottomOf="parent"
+    app:layout_constraintEnd_toEndOf="parent">
+
+    <!-- アイコンたち（円周に並べる） -->
+    <ImageView
+        android:id="@+id/icon1"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center"
+        android:src="@drawable/baseline_map_24"
+        android:translationX="0dp"
+        android:translationY="-120dp"
+        android:clickable="false"
+        android:focusable="false" />
+
+    <ImageView
+        android:id="@+id/icon2"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center"
+        android:src="@drawable/baseline_notifications_24"
+        android:translationX="-85dp"
+        android:translationY="-85dp"
+        android:clickable="false"
+        android:focusable="false" />
+
+    <ImageView
+        android:id="@+id/icon3"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center"
+        android:src="@drawable/baseline_person_18"
+        android:translationX="-120dp"
+        android:translationY="0dp"
+        android:clickable="false"
+        android:focusable="false" />
+
+    <ImageView
+        android:id="@+id/icon4"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center"
+        android:src="@drawable/baseline_shopping_cart_24"
+        android:translationX="-85dp"
+        android:translationY="85dp"
+        android:clickable="false"
+        android:focusable="false" />
+
+    <ImageView
+        android:id="@+id/icon5"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center"
+        android:src="@drawable/baseline_question_answer_24"
+        android:translationX="0dp"
+        android:translationY="120dp"
+        android:clickable="false"
+        android:focusable="false" />
+
+    <ImageView
+        android:id="@+id/icon6"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center"
+        android:src="@drawable/baseline_notifications_24"
+        android:translationX="85dp"
+        android:translationY="85dp"
+        android:clickable="false"
+        android:focusable="false" />
+
+    <ImageView
+        android:id="@+id/icon7"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center"
+        android:src="@drawable/baseline_person_18"
+        android:translationX="120dp"
+        android:translationY="0dp"
+        android:clickable="false"
+        android:focusable="false" />
+
+    <ImageView
+        android:id="@+id/icon8"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center"
+        android:src="@drawable/baseline_shopping_cart_24"
+        android:translationX="85dp"
+        android:translationY="-85dp"
+        android:clickable="false"
+        android:focusable="false" />
+
+    <!-- もし中央ボタンを入れる場合はこちらをアンコメント -->
+    <!--
+    <ImageButton
+        android:id="@+id/searchMarkerButton"
+        android:layout_width="70dp"
+        android:layout_height="70dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="Search"
+        android:src="@android:drawable/ic_menu_search"
+        android:translationX="110dp"
+        android:translationY="120dp" />
+    -->
+
+</com.example.mapboxdemo2.ui.InterceptFrameLayout>

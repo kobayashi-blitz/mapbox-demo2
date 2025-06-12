@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mapbox デモ 2</string>
+    <string name="my_location">現在地</string>
+    <string name="no_notifications">通知はありません</string>
+    <string name="permission_denied_explanation">位置情報の許可が拒否されました。アプリ設定で有効にしてください。</string>
+    <string name="permission_rationale">地図上に現在地を表示するには位置情報の許可が必要です</string>
+    <string name="search_hint">場所を検索...</string>
+    <string name="search_menu">検索メニュー</string>
+    <string name="settings">設定</string>
+    <string name="zoom_in">拡大</string>
+    <string name="zoom_out">縮小</string>
+</resources>

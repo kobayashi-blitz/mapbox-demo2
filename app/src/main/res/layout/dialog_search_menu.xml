@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <!-- フリーワード検索 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="フリーワード検索"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <EditText
+            android:id="@+id/keywordEditText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="キーワード"
+            android:inputType="text"
+            android:autofillHints="username"
+            android:minHeight="48dp"
+            android:padding="12dp"
+            android:imeOptions="actionSearch"/>
+
+        <Button
+            android:id="@+id/keywordSearchButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="検索"
+            android:contentDescription="キーワード検索ボタン"/>
+    </LinearLayout>
+
+    <!-- 検索履歴ラベル -->
+    <TextView
+        android:id="@+id/historyLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="検索履歴"
+        android:visibility="gone"
+        android:textAppearance="?android:attr/textAppearanceSmall"
+        android:layout_marginTop="12dp" />
+
+    <!-- 履歴RecyclerView化（スワイプ削除対応） -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/keywordHistoryRecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:layout_marginBottom="12dp"/>
+
+    <Button
+        android:id="@+id/photoSearchButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="写真から位置検索"
+        android:layout_marginTop="16dp"/>
+
+
+</LinearLayout>

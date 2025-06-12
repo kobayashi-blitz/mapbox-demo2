@@ -1,0 +1,62 @@
+[
+    {
+        "merged": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-mergeDebugResources-52:/layout/fragment_notice_tab_admin.xml",
+        "source": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-main-55:/layout/fragment_notice_tab_admin.xml"
+    },
+    {
+        "merged": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-mergeDebugResources-52:/layout/fragment_notice.xml",
+        "source": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-main-55:/layout/fragment_notice.xml"
+    },
+    {
+        "merged": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-mergeDebugResources-52:/layout/fragment_marker_settings.xml",
+        "source": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-main-55:/layout/fragment_marker_settings.xml"
+    },
+    {
+        "merged": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-mergeDebugResources-52:/layout/activity_main.xml",
+        "source": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-main-55:/layout/activity_main.xml"
+    },
+    {
+        "merged": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-mergeDebugResources-52:/layout/item_notification.xml",
+        "source": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-main-55:/layout/item_notification.xml"
+    },
+    {
+        "merged": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-mergeDebugResources-52:/layout/fragment_map.xml",
+        "source": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-main-55:/layout/fragment_map.xml"
+    },
+    {
+        "merged": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-mergeDebugResources-52:/layout/layout_marker_wheel.xml",
+        "source": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-main-55:/layout/layout_marker_wheel.xml"
+    },
+    {
+        "merged": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-mergeDebugResources-52:/layout/fragment_mypage.xml",
+        "source": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-main-55:/layout/fragment_mypage.xml"
+    },
+    {
+        "merged": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-mergeDebugResources-52:/layout/fragment_notice_tab_news.xml",
+        "source": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-main-55:/layout/fragment_notice_tab_news.xml"
+    },
+    {
+        "merged": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-mergeDebugResources-52:/layout/dialog_notification_detail.xml",
+        "source": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-main-55:/layout/dialog_notification_detail.xml"
+    },
+    {
+        "merged": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-mergeDebugResources-52:/layout/fragment_notice_tab_marker.xml",
+        "source": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-main-55:/layout/fragment_notice_tab_marker.xml"
+    },
+    {
+        "merged": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-mergeDebugResources-52:/layout/fragment_marker_download.xml",
+        "source": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-main-55:/layout/fragment_marker_download.xml"
+    },
+    {
+        "merged": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-mergeDebugResources-52:/layout/dialog_search_results.xml",
+        "source": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-main-55:/layout/dialog_search_results.xml"
+    },
+    {
+        "merged": "com.example.mapboxdemo2.app-mergeDebugResources-52:/layout/layout_marker_wheel.xml",
+        "source": "com.example.mapboxdemo2.app-main-55:/layout/layout_marker_wheel.xml"
+    },
+    {
+        "merged": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-mergeDebugResources-52:/layout/dialog_search_menu.xml",
+        "source": "/Users/shinyakobayashi/.gradle/daemon/8.10/com.example.mapboxdemo2.app-main-55:/layout/dialog_search_menu.xml"
+    }
+]
