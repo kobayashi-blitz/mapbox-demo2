@@ -1,0 +1,36 @@
+# Created by .ignore support tool (https://www.jetbrains.com/idea/help/ignoring-files.html)
+
+# User-specific stuff
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+local.properties
+.DS_Store
+
+# Generated files
+.gradle/
+build/
+
+# Sensitive or private information
+# (もしAPIキーなどを直接ファイルに記述している場合は、そのファイルも追跡しないようにしましょう)
+# secrets.properties
+
+# Log files
+*.log
+
+# Keystore files
+*.jks
+*.keystore
+
+# Flutter files (念のため)
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.metadata
+
+# Profile and debug reports
+/captures/
+*.hprof
