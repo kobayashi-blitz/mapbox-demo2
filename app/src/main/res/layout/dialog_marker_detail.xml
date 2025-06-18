@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <TextView
+        android:id="@+id/markerNameTextView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="マーカー名"
+        android:textSize="20sp"
+        android:textStyle="bold"/>
+
+    <TextView
+        android:id="@+id/markerIdTextView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="ID:"
+        android:layout_marginTop="12dp"/>
+
+    <TextView
+        android:id="@+id/markerEnabledTextView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="ON/OFF"
+        android:layout_marginTop="8dp"/>
+</LinearLayout>

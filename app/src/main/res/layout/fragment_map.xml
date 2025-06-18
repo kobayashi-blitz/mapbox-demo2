@@ -1,4 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
 <FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:mapbox="http://schemas.mapbox.com/mapbox"
@@ -21,8 +20,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
-        android:layout_marginEnd="0dp"
-        android:layout_marginBottom="60dp"
+        android:layout_marginEnd="5dp"
+        android:layout_marginBottom="13dp"
         android:clipChildren="false"
         android:clipToPadding="false"
         android:clickable="true"
@@ -35,7 +34,8 @@
             android:layout_width="70dp"
             android:layout_height="70dp"
             android:contentDescription="ホイール切り替えボタン"
-            android:src="@drawable/onigiri" />
+            android:background="@android:color/white"
+            android:src="@drawable/wheel_register" />
 
     </FrameLayout>
 
@@ -86,4 +86,3 @@
     </LinearLayout>
 
 </FrameLayout>
-

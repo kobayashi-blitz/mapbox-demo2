@@ -12,7 +12,7 @@ import com.example.mapboxdemo2.R
 import com.example.mapboxdemo2.adapters.NoticeAdapter
 import com.example.mapboxdemo2.model.NotificationItem
 import com.example.mapboxdemo2.model.NotificationType
-
+import com.example.mapboxdemo2.dialogs.NotificationDetailDialog
 class NoticeMarkerFragment : Fragment() {
 
     private lateinit var recyclerView: RecyclerView
@@ -27,7 +27,7 @@ class NoticeMarkerFragment : Fragment() {
         emptyLabel = view.findViewById(R.id.emptyLabelMarker)
 
         adapter = NoticeAdapter(NotificationType.MARKER) { notificationItem ->
-            // ここで詳細ダイアログ表示など
+            NotificationDetailDialog.show(parentFragmentManager, notificationItem)
         }
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
         recyclerView.adapter = adapter

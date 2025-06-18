@@ -14,7 +14,6 @@ import android.provider.Settings
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.ImageButton
-import android.widget.Toast
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.snackbar.Snackbar
 import com.mapbox.geojson.Point
@@ -54,6 +53,8 @@ import android.view.ViewGroup
 import android.text.TextUtils
 import android.view.Gravity
 import android.widget.TextView
+import android.widget.Toast
+import com.example.mapboxdemo2.feature.FunctionNavigation
 import androidx.core.content.res.ResourcesCompat
 import com.mapbox.search.common.AsyncOperationTask
 import android.widget.LinearLayout
@@ -102,7 +103,8 @@ import androidx.dynamicanimation.animation.SpringForce
 import android.view.ViewOutlineProvider
 import android.graphics.Outline
 import kotlin.math.roundToInt
-import com.mapbox.maps.CameraChangedCallback
+import android.graphics.Point as AndroidPoint // ★修正: android.graphics.Point に別名 'AndroidPoint' を付けてインポート
+
 
 class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
@@ -123,12 +125,29 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         val markerView = currentMarkerView ?: return
         val latLng = droppedMarkerLatLng ?: return
         val screenPoint = mapView.getMapboxMap().pixelForCoordinate(latLng)
-        val markerSize = 64.dpToPx()
+        val markerSize = 48.dpToPx()
         (markerView.layoutParams as? FrameLayout.LayoutParams)?.apply {
             this.leftMargin = (screenPoint.x - markerSize / 2).toInt()
             this.topMargin = (screenPoint.y - markerSize / 2).toInt()
         }
         markerView.requestLayout()
+    }
+
+    // ★追加: 透明なドラッグシャドウビルダー
+    private class TransparentDragShadowBuilder(view: View) : View.DragShadowBuilder(view) {
+        override fun onDrawShadow(canvas: Canvas) {
+            // 何も描画しない（透明にする）
+        }
+
+        override fun onProvideShadowMetrics(outMetrics: AndroidPoint, outShadowSize: AndroidPoint) { // ★修正: ここを AndroidPoint に変更
+            val width: Int = view.width
+            val height: Int = view.height
+
+            outMetrics.x = width / 2
+            outMetrics.y = height / 2
+            outShadowSize.x = width
+            outShadowSize.y = height
+        }
     }
 
     // この位置に入れる！
@@ -367,6 +386,46 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
             startActivityForResult(intent, REQUEST_CODE_PHOTO_SEARCH)
         }
     }
+
+    /**
+     * 検索マーカー設置時に近隣の駅を検索してリスト表示
+     */
+    private fun searchNearbyStations(point: Point) {
+        val options = SearchOptions.Builder()
+            .proximity(point)
+            .limit(10)
+            .build()
+
+        searchEngine.search("駅", options, object : SearchSelectionCallback {
+            override fun onSuggestions(suggestions: List<SearchSuggestion>, responseInfo: ResponseInfo) {
+                if (suggestions.isNotEmpty()) {
+                    searchEngine.select(suggestions.first(), this)
+                } else {
+                    Toast.makeText(requireContext(), "近くの駅が見つかりませんでした", Toast.LENGTH_SHORT).show()
+                }
+            }
+            override fun onResult(suggestion: SearchSuggestion, result: SearchResult, responseInfo: ResponseInfo) {
+                showSearchResultsModal(listOf(result))
+            }
+            override fun onResults(
+                suggestion: SearchSuggestion,
+                results: List<SearchResult>,
+                responseInfo: ResponseInfo
+            ) {
+                val stationResults = results.filter { it.name.contains("駅") }
+                if (stationResults.isNotEmpty()) {
+                    // マーカー設置地点(point)からの距離で並び替え
+                    val sorted = stationResults.sortedBy { distanceBetween(point, it.coordinate) }
+                    showSearchResultsModal(sorted)
+                } else {
+                    Toast.makeText(requireContext(), "近くの駅が見つかりませんでした", Toast.LENGTH_SHORT).show()
+                }
+            }
+            override fun onError(e: Exception) {
+                Toast.makeText(requireContext(), "駅検索失敗: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
     // 現在ハイライト中のグリッド
     private var highlightedGridPolygon: com.mapbox.geojson.Polygon? = null
     // グリッドの基準起点（アプリ起動時の画面左上座標を保存）
@@ -425,7 +484,23 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     private var initialAngle = 0f
     private var totalRotation = 0f
     private var allowedDirection = 0
-    private lateinit var icons: List<View>
+    private lateinit var icons: List<ImageView>
+
+    // 各モードごとの初期アイコンリスト（将来DB/APIのデータでここを差し替える想定）
+    // 例: wheelIconResListForRegisterは「登録」モード用、wheelIconResListForSearchは「検索」モード用、wheelIconResListForFunctionは「機能」モード用
+    // 今後はこのリストをDBやAPIからユーザーごとに動的に取得し、差し替えて運用できる構造です
+    private var wheelIconResListForRegister = listOf(
+        R.drawable.baseline_map_24,
+        R.drawable.baseline_notifications_24,
+        R.drawable.baseline_person_18,
+        R.drawable.baseline_shopping_cart_24,
+        R.drawable.baseline_question_answer_24,
+        R.drawable.baseline_notifications_24,
+        R.drawable.baseline_person_18,
+        R.drawable.baseline_shopping_cart_24
+    )
+    private var wheelIconResListForSearch = List(8) { R.drawable.marker_rsearch_facilityicon01 }
+    private var wheelIconResListForFunction = List(8) { R.drawable.marker_rsearch_facilityicon02 }
 
     private var isNavigating = false
     // --- marker wheel (circleContainer) 用プロパティ追加 ---
@@ -437,6 +512,16 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     private var rotationStartRotation = 0f
     // --- スプラッシュ表示のための開始時刻記録用 ---
     private var splashShownTime: Long = 0L
+
+    // --- marker mode switching properties ---
+    private var markerModeIndex = 0
+    // 既存: markerModes, markerIcons（今後廃止予定）
+    private val markerModes = listOf("register", "search", "function")
+    private val markerIcons = listOf(
+        R.drawable.wheel_register,
+        R.drawable.wheel_search,
+        R.drawable.wheel_function
+    )
 
     /**
      * 画面表示範囲にズームレベルに応じた絶対グリッド（5m/50m/500m/5km）を描画します。
@@ -627,15 +712,26 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         }
 
         icons = listOf(
-            view.findViewById(R.id.icon1),
-            view.findViewById(R.id.icon2),
-            view.findViewById(R.id.icon3),
-            view.findViewById(R.id.icon4),
-            view.findViewById(R.id.icon5),
-            view.findViewById(R.id.icon6),
-            view.findViewById(R.id.icon7),
-            view.findViewById(R.id.icon8)
+            view.findViewById<ImageView>(R.id.icon1),
+            view.findViewById<ImageView>(R.id.icon2),
+            view.findViewById<ImageView>(R.id.icon3),
+            view.findViewById<ImageView>(R.id.icon4),
+            view.findViewById<ImageView>(R.id.icon5),
+            view.findViewById<ImageView>(R.id.icon6),
+            view.findViewById<ImageView>(R.id.icon7),
+            view.findViewById<ImageView>(R.id.icon8)
         )
+
+        // 中央ボタンの初期化
+        val centerButton = view.findViewById<ImageView>(R.id.searchMarkerButton)
+        centerButton.setImageResource(markerIcons[markerModeIndex])
+        // 中央ボタン画像セット直後にwheelの周囲アイコンも初期化（初回起動時にも正しい画像で揃う）
+        updateWheelIcons(markerModeIndex)
+        centerButton.setOnClickListener {
+            markerModeIndex = (markerModeIndex + 1) % markerIcons.size
+            centerButton.setImageResource(markerIcons[markerModeIndex])
+            updateWheelIcons(markerModeIndex)
+        }
 
         // --- ホイールアイコン長押しドラッグ対応 ---
         icons.forEach { icon ->
@@ -647,7 +743,8 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                     arrayOf(android.content.ClipDescription.MIMETYPE_TEXT_PLAIN),
                     item
                 )
-                val shadowBuilder = View.DragShadowBuilder(v)
+                // ★修正: 透明なDragShadowBuilderを使用
+                val shadowBuilder = TransparentDragShadowBuilder(v) // ここを変更
                 isDraggingIcon = true
                 // localStateにView(v)を渡す
                 v.startDragAndDrop(dragData, shadowBuilder, v, 0)
@@ -762,50 +859,101 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                 else -> false
             }
         }
+
+
+
         // --- ドラッグ＆ドロップ: マップへのドロップでバブル表示 ---
         mapView.setOnDragListener { v, event ->
             when (event.action) {
-                android.view.DragEvent.ACTION_DROP -> {
-                    // ドロップしたピクセル座標→緯度経度に変換
-                    val x = event.x
-                    val y = event.y
-                    val markerPoint = mapView.getMapboxMap().coordinateForPixel(
-                        com.mapbox.maps.ScreenCoordinate(x.toDouble(), y.toDouble())
-                    )
-
-                    // ドロップした座標を記録
-                    droppedMarkerLatLng = markerPoint
-
-                    // ドラッグ元アイコンのDrawable取得
-                    val draggedIconView = event.localState as? ImageView
+                android.view.DragEvent.ACTION_DRAG_STARTED -> {
+                    // 仮マーカー作成（まだ置いていないので画面座標で表示）
+                    // ★維持: ここで currentMarkerView を生成し、rootViewに追加する
+                    val draggedIconView = event.localState as? ImageView // 長押しされた元のアイコン
                     val drawable = draggedIconView?.drawable
-
-                    // 親FrameLayout取得
+                    val markerSize = 48.dpToPx()
                     val rootView = requireActivity().findViewById<FrameLayout>(android.R.id.content)
-                    val markerSize = 64.dpToPx()
 
-                    // 既存マーカーViewがあれば消す
+                    // 既存マーカーViewがあれば消す（念のため）
                     currentMarkerView?.let { (it.parent as? ViewGroup)?.removeView(it) }
 
-                    // ImageView生成（マーカーをドロップ地点に静的配置）
+                    // 仮マーカーView生成
                     val markerView = ImageView(requireContext()).apply {
-                        drawable?.let { setImageDrawable(it) }
+                        drawable?.let { setImageDrawable(it) } // ドラッグされたアイコンの画像を設定
                         layoutParams = FrameLayout.LayoutParams(markerSize, markerSize)
                     }
                     rootView.addView(markerView)
-                    currentMarkerView = markerView
+                    currentMarkerView = markerView // このViewがドラッグ中の上部のアイコンとなる
+                    true
+                }
+                android.view.DragEvent.ACTION_DRAG_LOCATION -> {
+                    // ドラッグ中：指より少し上に仮マーカーを表示
+                    // ★維持: currentMarkerView の位置をオフセット付きで更新する
+                    val markerView = currentMarkerView ?: return@setOnDragListener false
+                    val markerSize = 48.dpToPx()
+                    val dragOffset = 86 // 指より上
+                    val x = event.x
+                    val y = event.y
+                    (markerView.layoutParams as? FrameLayout.LayoutParams)?.apply {
+                        leftMargin = (x - markerSize / 2).toInt()
+                        topMargin = (y - markerSize / 2 - dragOffset).toInt()
+                    }
+                    markerView.requestLayout()
+                    true
+                }
+                android.view.DragEvent.ACTION_DROP -> {
+                    // 86pxオフセットを適用して地図座標へ変換
+                    val x = event.x
+                    val y = event.y - 86  // DRAG_LOCATIONの視覚的オフセットと一致させる
+                    val markerPoint = mapView.getMapboxMap().coordinateForPixel(
+                        com.mapbox.maps.ScreenCoordinate(x.toDouble(), y.toDouble())
+                    )
+                    droppedMarkerLatLng = markerPoint
 
-                    // ドロップした地図座標→画面座標に変換してView位置をセット
-                    updateMarkerViewPosition()
+                    // --- 検索モード時は近隣の駅を検索 ---
+                    // 検索モードの場合のみ、近隣の駅を検索してリスト表示
+                    if (markerModeIndex == 1) {
+                        searchNearbyStations(markerPoint)
+                    }
 
-                    // カメラをマーカー座標までアニメ移動＆バブル表示
-                    animateCameraToPosition(markerPoint) {
-                        showBubbleMarkerAt(markerPoint, "この場所")
+                    // --- 機能マーカーモード時は FunctionNavigation を呼び出す ---
+                    if (markerModeIndex == 2) {
+                        val iconIndex = icons.indexOfFirst { it.isPressed }
+                        val action = com.example.mapboxdemo2.feature.FunctionNavigation { origin, dest ->
+                            drawRouteLine(origin, dest)
+                        }
+                        currentLocation?.let { origin ->
+                            action.execute(requireContext(), markerPoint, mapOf("origin" to origin))
+                        } ?: run {
+                            Toast.makeText(requireContext(), "現在地が取得できません", Toast.LENGTH_SHORT).show()
+                        }
+                        isDraggingIcon = false
+                        return@setOnDragListener true
+                    }
+
+                    // ★維持: ドロップ後もマーカーViewの画面上位置を維持（位置をリセットしない）
+                    // updateMarkerViewPosition() は呼ばない（DRAG_LOCATIONで設定された位置をそのまま使う）
+                    // もしドロップ後に地図の中心に吸い寄せたい場合はここで updateMarkerViewPosition() を呼ぶ
+
+                    // 検索モード時はバブルメニューを表示しない
+                    if (markerModeIndex != 1) {
+                        animateCameraToPosition(markerPoint) {
+                            showBubbleMarkerAt(markerPoint, "この場所")
+                        }
+                    } else {
+                        // 検索マーカー時はリスト表示のみでOK
+                        animateCameraToPosition(markerPoint)
                     }
                     isDraggingIcon = false
                     true
                 }
                 android.view.DragEvent.ACTION_DRAG_ENDED -> {
+                    // ドラッグが終了した場合の処理
+                    // ★修正: ドロップされずに終わった場合のみ currentMarkerView を削除する
+                    // ドロップされた場合は currentMarkerView はそのまま地図上のマーカーとして残す
+                    if (event.result == false) { // ドロップが成功しなかった場合
+                        currentMarkerView?.let { (it.parent as? ViewGroup)?.removeView(it) }
+                        currentMarkerView = null // 参照をクリア
+                    }
                     isDraggingIcon = false
                     true
                 }
@@ -871,6 +1019,24 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
             false
         }
     }
+
+
+    /**
+     * ホイールUIの周囲アイコン画像をモードごとに切り替える。
+     * このリストは将来的にDBやAPIからユーザーごとに差し替えられる構成です。
+     */
+    private fun updateWheelIcons(mode: Int) {
+        val resList = when (mode) {
+            0 -> wheelIconResListForRegister
+            1 -> wheelIconResListForSearch
+            2 -> wheelIconResListForFunction
+            else -> wheelIconResListForRegister
+        }
+        icons.forEachIndexed { i, iv ->
+            iv.setImageResource(resList.getOrElse(i) { R.drawable.baseline_map_24 })
+        }
+    }
+
 
 
     /**
@@ -1534,6 +1700,9 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         listView.setOnItemClickListener { _, _, position, _ ->
             if (!isAdded) return@setOnItemClickListener
             dialog.dismiss()
+            // ★ダイアログを閉じた時にもマーカーを消す
+            currentMarkerView?.let { (it.parent as? ViewGroup)?.removeView(it) }
+            currentMarkerView = null
             val selected = results[position]
 
             // 距離を取得（currentLocation がある場合）
@@ -1555,6 +1724,11 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         }
 
         dialog.setContentView(view)
+        // ★ダイアログ閉じた時にもマーカーを消す
+        dialog.setOnDismissListener {
+            currentMarkerView?.let { (it.parent as? ViewGroup)?.removeView(it) }
+            currentMarkerView = null
+        }
         dialog.show()
     }
 
@@ -2279,4 +2453,5 @@ private fun pointFromGridId(id: String): Point {
 
 
 
+    // マーカーホイールのアイコンをモードに応じて切り替える
 

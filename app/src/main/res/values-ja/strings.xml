@@ -9,4 +9,5 @@
     <string name="my_location">現在地</string>
     <string name="search_menu">検索メニュー</string>
     <string name="no_notifications">通知はありません</string>
+    <string name="category_format">カテゴリ: %1$s</string>
 </resources>
