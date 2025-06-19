@@ -105,6 +105,9 @@ import android.graphics.Outline
 import kotlin.math.roundToInt
 import android.graphics.Point as AndroidPoint // ★修正: android.graphics.Point に別名 'AndroidPoint' を付けてインポート
 
+import android.widget.ProgressBar  // ★追加
+import android.widget.Button         // ★追加
+
 
 class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
@@ -390,7 +393,10 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     /**
      * 検索マーカー設置時に近隣の駅を検索してリスト表示
      */
+    // 282行目からの searchNearbyStations メソッド全体を置き換え
     private fun searchNearbyStations(point: Point) {
+        showLoading(true) // ★通信開始前にローディング表示
+
         val options = SearchOptions.Builder()
             .proximity(point)
             .limit(10)
@@ -401,10 +407,12 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                 if (suggestions.isNotEmpty()) {
                     searchEngine.select(suggestions.first(), this)
                 } else {
-                    Toast.makeText(requireContext(), "近くの駅が見つかりませんでした", Toast.LENGTH_SHORT).show()
+                    showLoading(false) // ★失敗したのでローディング非表示
+                    showError() // ★エラー表示
                 }
             }
             override fun onResult(suggestion: SearchSuggestion, result: SearchResult, responseInfo: ResponseInfo) {
+                showLoading(false) // ★成功したのでローディング非表示
                 showSearchResultsModal(listOf(result))
             }
             override fun onResults(
@@ -412,17 +420,19 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                 results: List<SearchResult>,
                 responseInfo: ResponseInfo
             ) {
+                showLoading(false) // ★成功したのでローディング非表示
                 val stationResults = results.filter { it.name.contains("駅") }
                 if (stationResults.isNotEmpty()) {
-                    // マーカー設置地点(point)からの距離で並び替え
                     val sorted = stationResults.sortedBy { distanceBetween(point, it.coordinate) }
                     showSearchResultsModal(sorted)
                 } else {
-                    Toast.makeText(requireContext(), "近くの駅が見つかりませんでした", Toast.LENGTH_SHORT).show()
+                    showError() // ★結果が0件でもエラー表示
                 }
             }
             override fun onError(e: Exception) {
-                Toast.makeText(requireContext(), "駅検索失敗: ${e.message}", Toast.LENGTH_SHORT).show()
+                showLoading(false) // ★失敗したのでローディング非表示
+                showError() // ★エラー表示
+                Log.e("SearchError", "駅検索失敗", e)
             }
         })
     }
@@ -432,6 +442,15 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     private var gridOrigin: Point? = null
     // 最後に表示した検索結果を保持
     private var lastSearchResults: List<SearchResult> = emptyList()
+
+    private lateinit var overlayContainer: FrameLayout
+    private lateinit var mapRootContainer: FrameLayout
+    private lateinit var progressBar: ProgressBar
+    private lateinit var errorLayout: LinearLayout
+    private lateinit var errorCloseButton: Button
+
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var showLoadingRunnable: Runnable? = null
 
     private lateinit var mapView: MapView
     private lateinit var searchEditText: EditText
@@ -502,7 +521,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     private var wheelIconResListForSearch = List(8) { R.drawable.marker_rsearch_facilityicon01 }
     private var wheelIconResListForFunction = List(8) { R.drawable.marker_rsearch_facilityicon02 }
 
-    private var isNavigating = false
+    var isNavigating = false
     // --- marker wheel (circleContainer) 用プロパティ追加 ---
     private var isWheelEngaged = false
     private var lastAngle = 0f
@@ -709,6 +728,9 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         circleContainer?.post {
             centerX = circleContainer.width / 2f
             centerY = circleContainer.height / 2f
+            circleContainer.rotation = 0f
+            totalRotation = 0f
+            rotationStartRotation = 0f
         }
 
         icons = listOf(
@@ -753,6 +775,9 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         }
 
         circleContainer?.setOnTouchListener { v, event ->
+            // ★中心座標が初期化されていない場合は何もしない
+            if (centerX == 0f || centerY == 0f) return@setOnTouchListener true
+
             // ドラッグ中はホイール回転を禁止
             if (isDraggingIcon) {
                 return@setOnTouchListener false
@@ -881,7 +906,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                         drawable?.let { setImageDrawable(it) } // ドラッグされたアイコンの画像を設定
                         layoutParams = FrameLayout.LayoutParams(markerSize, markerSize)
                     }
-                    rootView.addView(markerView)
+                    mapRootContainer.addView(markerView)
                     currentMarkerView = markerView // このViewがドラッグ中の上部のアイコンとなる
                     true
                 }
@@ -962,6 +987,20 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         }
         // --- marker wheel (circleContainer) 移植ここまで ---
 
+        // オーバーレイUIの紐付けとリスナー設定
+        mapRootContainer = view.findViewById(R.id.mapRootContainer)
+        overlayContainer = view.findViewById<FrameLayout>(R.id.overlayContainer)
+        progressBar = view.findViewById<ProgressBar>(R.id.progressBar)
+        errorLayout = view.findViewById<LinearLayout>(R.id.errorLayout)
+        errorCloseButton = view.findViewById<Button>(R.id.errorCloseButton)
+
+        errorCloseButton.setOnClickListener {
+            overlayContainer.visibility = View.GONE
+            // 中途半端に残ったマーカーを消す
+            currentMarkerView?.let { (it.parent as? ViewGroup)?.removeView(it) }
+            currentMarkerView = null
+        }
+
 
 
         // --- グリッドタップでハイライト ---
@@ -1018,6 +1057,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
             }
             false
         }
+
     }
 
 
@@ -1483,7 +1523,11 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     /**
      * API からルートデータを取得し、地図上にルート線を描画します。
      */
+    // 1339行目からの drawRouteLine メソッド全体を置き換え
     private fun drawRouteLine(origin: Point, destination: Point) {
+        // UIスレッドでローディング表示
+        requireActivity().runOnUiThread { showLoading(true) }
+
         val accessToken = getString(R.string.mapbox_access_token)
         val url = "https://api.mapbox.com/directions/v5/mapbox/walking/" +
                 "${origin.longitude()},${origin.latitude()};" +
@@ -1495,32 +1539,20 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                 val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
                 connection.requestMethod = "GET"
                 val response = connection.inputStream.bufferedReader().readText()
-
                 val json = org.json.JSONObject(response)
 
-                // ルート線の描画
-                val geometry = json.getJSONArray("routes")
-                    .getJSONObject(0)
-                    .getJSONObject("geometry")
+                // ... (geometryやstepsArrayのパース処理はそのまま) ...
+                val geometry = json.getJSONArray("routes").getJSONObject(0).getJSONObject("geometry")
                 val coordinates = geometry.getJSONArray("coordinates")
-
                 val points = mutableListOf<Point>()
                 for (i in 0 until coordinates.length()) {
                     val coord = coordinates.getJSONArray(i)
                     points.add(Point.fromLngLat(coord.getDouble(0), coord.getDouble(1)))
                 }
-
                 val routeLine = com.mapbox.geojson.LineString.fromLngLats(points)
                 val routeFeature = com.mapbox.geojson.Feature.fromGeometry(routeLine)
                 val featureCollection = com.mapbox.geojson.FeatureCollection.fromFeatures(arrayOf(routeFeature))
-
-                // ステップ案内（instruction + 座標）
-                val stepsArray = json.getJSONArray("routes")
-                    .getJSONObject(0)
-                    .getJSONArray("legs")
-                    .getJSONObject(0)
-                    .getJSONArray("steps")
-
+                val stepsArray = json.getJSONArray("routes").getJSONObject(0).getJSONArray("legs").getJSONObject(0).getJSONArray("steps")
                 navigationSteps.clear()
                 for (i in 0 until stepsArray.length()) {
                     val step = stepsArray.getJSONObject(i)
@@ -1531,54 +1563,53 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                     navigationSteps.add(Pair(stepPoint, instruction))
                 }
 
+                // 成功時のUI処理
                 requireActivity().runOnUiThread {
                     if (!isAdded) return@runOnUiThread
-                    isNavigating = true  // ← ナビ開始時にセット
-                    // --- 検索ダイアログアイコン（showSearchDialogButton）を無効化・グレーアウト ---
+                    showLoading(false) // ★成功したのでローディング非表示
+
+                    // ... (既存のナビゲーション開始処理) ...
+                    isNavigating = true
+                    requireActivity().runOnUiThread {
+                        view?.findViewById<View>(R.id.circleContainer)?.visibility = View.GONE
+                        view?.findViewById<View>(R.id.searchMarkerButton)?.visibility = View.GONE
+                    }
                     val searchDialogButton = requireActivity().findViewById<ImageButton>(R.id.showSearchDialogButton)
                     searchDialogButton.isEnabled = false
                     searchDialogButton.alpha = 0.5f
-
                     destinationPoint = destination
-                    // バブルを削除
                     removeBubbleViews()
-
                     val sourceId = "route-source"
                     val layerId = "route-layer"
                     val style = mapView.getMapboxMap().getStyle() ?: return@runOnUiThread
-
                     if (!style.styleSourceExists(sourceId)) {
-                        val source = geoJsonSource(sourceId) {
-                            featureCollection(featureCollection)
-                        }
+                        val source = geoJsonSource(sourceId) { featureCollection(featureCollection) }
                         style.addSource(source)
-
                         val layer = lineLayer(layerId, sourceId) {
                             lineColor("#4264fb")
                             lineWidth(6.0)
                             lineCap(LineCap.ROUND)
                             lineJoin(LineJoin.ROUND)
                         }
-
                         style.addLayerBelow(layer, "road-label")
                     } else {
                         val source = style.getSourceAs<GeoJsonSource>(sourceId)
                         source?.featureCollection(featureCollection)
                     }
-
-                    // ナビ開始（追従と案内も開始）
                     if (followListener == null) {
                         startFollowingUser()
                     }
-
                     showCancelNaviButton()
-                    showArDirectionOverlay() // 疑似AR画像表示
+                    showArDirectionOverlay()
                 }
 
             } catch (e: Exception) {
+                // 失敗時のUI処理
                 requireActivity().runOnUiThread {
                     if (!isAdded) return@runOnUiThread
-                    Toast.makeText(requireContext(), "ルート取得失敗: ${e.message}", Toast.LENGTH_SHORT).show()
+                    showLoading(false) // ★失敗したのでローディング非表示
+                    showError() // ★エラー表示
+                    Log.e("RouteError", "ルート取得失敗", e)
                 }
             }
         }.start()
@@ -2081,7 +2112,11 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
      *
      * TODO: Add more details or parameters description if needed.
      */
-    private fun stopNavigation() {
+    fun stopNavigation() {
+        requireActivity().runOnUiThread {
+            view?.findViewById<View>(R.id.circleContainer)?.visibility = View.VISIBLE
+            view?.findViewById<View>(R.id.searchMarkerButton)?.visibility = View.VISIBLE
+        }
         isNavigating = false  // ← ナビ終了時に解除
         navigationSteps.clear()
         hideCancelNaviButton()
@@ -2217,6 +2252,12 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         mapView.onStop()
 
         sensorManager.unregisterListener(sensorEventListener)
+        // アプリが非表示になった際、もしナビゲーション中であれば自動的に終了させます。
+        // (ダイアログでの確認ができない操作に対する安全策)
+        if (isNavigating) {
+            Log.d("NavLifecycle", "onPause() - ナビゲーションを自動終了")
+            stopNavigation()
+        }
     }
 
     private fun saveSearchHistory(query: String) {
@@ -2371,8 +2412,45 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         }
     }
 
+    /**
+     * ローディング表示を切り替えます（1.5秒の遅延表示対応版）
+     */
+    private fun showLoading(isLoading: Boolean) {
+        // 既に実行予約されている表示処理があればキャンセル
+        showLoadingRunnable?.let { handler.removeCallbacks(it) }
+        showLoadingRunnable = null
+
+        if (isLoading) {
+            // ★ローディング表示(true)が呼ばれたら、1.5秒後に実行する処理を予約
+            showLoadingRunnable = Runnable {
+                overlayContainer.visibility = View.VISIBLE
+                progressBar.visibility = View.VISIBLE
+                errorLayout.visibility = View.GONE
+                overlayContainer.bringToFront() // ★★★ この行を追記 ★★★
+            }
+            handler.postDelayed(showLoadingRunnable!!, 1500L) // 1500ミリ秒 = 1.5秒
+
+        } else {
+            // ★ローディング非表示(false)が呼ばれたら、即座に非表示にする
+            overlayContainer.visibility = View.GONE
+            progressBar.visibility = View.GONE
+        }
+    }
+
+    /**
+     * エラー表示を切り替えます
+     */
+    private fun showError() {
+        overlayContainer.visibility = View.VISIBLE
+        errorLayout.visibility = View.VISIBLE
+        progressBar.visibility = View.GONE
+        overlayContainer.bringToFront() // ★★★ この行を追記 ★★★
+    }
+
 
 }
+
+
 
 /**
  * グリッド中心座標(Point)から短縮グリッドIDを生成する（5mグリッド単位・起点固定）
