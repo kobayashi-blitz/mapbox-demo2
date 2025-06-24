@@ -11,8 +11,8 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.mapboxdemo2.R
 import com.example.mapboxdemo2.adapters.NoticeAdapter
-import com.example.mapboxdemo2.model.NotificationItem
-import com.example.mapboxdemo2.model.NotificationType
+import com.example.mapboxdemo2.date.model.NotificationItem
+import com.example.mapboxdemo2.date.model.NotificationType
 import com.example.mapboxdemo2.dialogs.NotificationDetailDialog
 class NoticeAdminFragment : Fragment() {
 

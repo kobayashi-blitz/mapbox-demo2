@@ -6,17 +6,20 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.mapboxdemo2.R
 import com.example.mapboxdemo2.adapters.MarkerSettingsAdapter
-import com.example.mapboxdemo2.model.MarkerSetting
+import com.example.mapboxdemo2.date.model.DownloadedMarker
+import com.example.mapboxdemo2.data.db.AppDatabase
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import kotlinx.coroutines.launch
 
 class RegistMarkerSettingsListFragment : Fragment() {
     private lateinit var adapter: MarkerSettingsAdapter
-    private var markerList: MutableList<MarkerSetting> = mutableListOf()
+    private var markerList: MutableList<DownloadedMarker> = mutableListOf()
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -29,11 +32,7 @@ class RegistMarkerSettingsListFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         val recyclerView = view.findViewById<RecyclerView>(R.id.markerSettingsRecyclerView)
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
-        markerList = mutableListOf(
-            MarkerSetting(1, "テストマーカーA", R.drawable.ic_launcher_foreground, true),
-            MarkerSetting(2, "テストマーカーB", R.drawable.ic_launcher_foreground, false),
-            MarkerSetting(3, "テストマーカーC", R.drawable.ic_launcher_foreground, true)
-        )
+
         adapter = MarkerSettingsAdapter(markerList) { item, isChecked ->
             // 切り替えイベント仮対応
         }
@@ -41,6 +40,14 @@ class RegistMarkerSettingsListFragment : Fragment() {
             showMarkerDetailDialog(item)
         }
         recyclerView.adapter = adapter
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            val db = AppDatabase.getDatabase(requireContext())
+            val data = db.downloadedMarkerDao().getAll()
+            markerList.clear()
+            markerList.addAll(data)
+            adapter.notifyDataSetChanged()
+        }
 
         val itemTouchHelperCallback = object : ItemTouchHelper.SimpleCallback(
             ItemTouchHelper.UP or ItemTouchHelper.DOWN,
@@ -68,7 +75,6 @@ class RegistMarkerSettingsListFragment : Fragment() {
                     }
                 }
                 adapter.notifyItemMoved(fromPos, toPos)
-                // adapter.swap(markerList)
                 return true
             }
 
@@ -84,12 +90,12 @@ class RegistMarkerSettingsListFragment : Fragment() {
         }
     }
 
-    private fun showMarkerDetailDialog(item: MarkerSetting) {
+    private fun showMarkerDetailDialog(item: DownloadedMarker) {
         val dialog = BottomSheetDialog(requireContext())
         val view = layoutInflater.inflate(R.layout.dialog_marker_detail, null)
         view.findViewById<TextView>(R.id.markerNameTextView).text = item.name
         view.findViewById<TextView>(R.id.markerIdTextView).text = "ID: ${item.id}"
-        view.findViewById<TextView>(R.id.markerEnabledTextView).text = if (item.enabled) "ON" else "OFF"
+        view.findViewById<TextView>(R.id.markerEnabledTextView).text = if (item.isVisible) "ON" else "OFF"
         dialog.setContentView(view)
         dialog.show()
     }

@@ -7,7 +7,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.example.mapboxdemo2.R
-import com.example.mapboxdemo2.model.MarkerDownloadItem
+import com.example.mapboxdemo2.date.model.MarkerDownloadItem
 
 class MarkerDownloadAdapter(
     private val items: List<MarkerDownloadItem>

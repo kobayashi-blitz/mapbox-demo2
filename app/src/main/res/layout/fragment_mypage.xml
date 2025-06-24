@@ -1,30 +1,207 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="#F5F5F5"
+    tools:context=".MyPageFragment">
 
-    <TextView
-        android:id="@+id/text_mypage_title"
-        android:layout_width="0dp"
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="マイページ (Fragment)"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        android:gravity="center"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="32dp"/>
+        android:paddingBottom="32dp">
 
-    <Button
-        android:id="@+id/button_dummy_mypage"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="ポイント確認／設定"
-        app:layout_constraintTop_toBottomOf="@id/text_mypage_title"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="24dp"/>
-</androidx.constraintlayout.widget.ConstraintLayout>
+        <androidx.cardview.widget.CardView
+            android:id="@+id/profileCard"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_margin="16dp"
+            app:cardCornerRadius="8dp"
+            app:cardElevation="2dp"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="16dp">
+
+                <ImageView
+                    android:id="@+id/userIconImageView"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:src="@drawable/baseline_person_18"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent"/>
+
+                <ImageButton
+                    android:id="@+id/editProfileButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:src="@drawable/ic_edit_24"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="プロフィールを編集"
+                    android:visibility="gone"
+                    tools:visibility="visible"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent"/>
+
+                <TextView
+                    android:id="@+id/userCategoryTextView"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="8dp"
+                    android:text="未登録ユーザー"
+                    android:textSize="12sp"
+                    android:textColor="@android:color/darker_gray"
+                    app:layout_constraintStart_toEndOf="@id/userIconImageView"
+                    app:layout_constraintEnd_toStartOf="@id/editProfileButton"
+                    app:layout_constraintTop_toTopOf="@id/userIconImageView" />
+
+                <TextView
+                    android:id="@+id/nicknameTextView"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:text="ゲストさん"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:textColor="@android:color/black"
+                    app:layout_constraintStart_toStartOf="@id/userCategoryTextView"
+                    app:layout_constraintEnd_toEndOf="@id/userCategoryTextView"
+                    app:layout_constraintTop_toBottomOf="@id/userCategoryTextView" />
+
+                <LinearLayout
+                    android:id="@+id/ticketCountLayout"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="4dp"
+                    app:layout_constraintTop_toBottomOf="@id/nicknameTextView"
+                    app:layout_constraintStart_toStartOf="@id/nicknameTextView"
+                    app:layout_constraintEnd_toEndOf="parent">
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:src="@drawable/confirmation_number_24px"
+                        app:tint="@color/purple_500" />
+
+                    <TextView
+                        android:id="@+id/ticketCountTextView"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="保有チケット: 0枚"
+                        android:layout_marginStart="8dp"
+                        android:textColor="@android:color/black" />
+                </LinearLayout>
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+        </androidx.cardview.widget.CardView>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/button_login_register"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp"
+            android:text="アカウント登録 / ログイン"
+            app:layout_constraintTop_toBottomOf="@id/profileCard"
+            app:layout_constraintStart_toStartOf="@id/profileCard"
+            app:layout_constraintEnd_toEndOf="@id/profileCard"/>
+
+        <LinearLayout
+            android:id="@+id/helpSectionLayout"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="24dp"
+            app:layout_constraintTop_toBottomOf="@id/button_login_register"
+            app:layout_constraintStart_toStartOf="@id/profileCard"
+            app:layout_constraintEnd_toEndOf="@id/profileCard">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="ヘルプ"
+                android:textStyle="bold"
+                android:layout_marginStart="8dp"
+                android:layout_marginBottom="8dp"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/background_rounded_corners_white"
+                android:elevation="2dp">
+
+                <TextView
+                    android:id="@+id/helpMenu"
+                    style="@style/MyPageMenuItem"
+                    android:text="ヘルプ・使い方ガイド" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="#E0E0E0"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"/>
+
+                <TextView
+                    android:id="@+id/tutorialMenu"
+                    style="@style/MyPageMenuItem"
+                    android:text="チュートリアルを再表示" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/aboutSectionLayout"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="24dp"
+            app:layout_constraintTop_toBottomOf="@id/helpSectionLayout"
+            app:layout_constraintStart_toStartOf="@id/profileCard"
+            app:layout_constraintEnd_toEndOf="@id/profileCard">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="このアプリについて"
+                android:textStyle="bold"
+                android:layout_marginStart="8dp"
+                android:layout_marginBottom="8dp"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/background_rounded_corners_white"
+                android:elevation="2dp">
+
+                <TextView
+                    android:id="@+id/termsOfServiceMenu"
+                    style="@style/MyPageMenuItem"
+                    android:text="利用規約" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="#E0E0E0"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"/>
+
+                <TextView
+                    android:id="@+id/privacyPolicyMenu"
+                    style="@style/MyPageMenuItem"
+                    android:text="プライバシーポリシー" />
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</ScrollView>

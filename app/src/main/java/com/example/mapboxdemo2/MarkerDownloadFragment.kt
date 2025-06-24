@@ -7,9 +7,8 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.RecyclerView
-import com.example.mapboxdemo2.MarkerDownloadDetailDialog
 import com.example.mapboxdemo2.adapters.MarkerDownloadAdapter
-import com.example.mapboxdemo2.model.MarkerDownloadItem
+import com.example.mapboxdemo2.date.model.MarkerDownloadItem
 
 class MarkerDownloadFragment : Fragment() {
 

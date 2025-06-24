@@ -6,8 +6,8 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.example.mapboxdemo2.R
-import com.example.mapboxdemo2.model.NotificationItem
-import com.example.mapboxdemo2.model.NotificationType
+import com.example.mapboxdemo2.date.model.NotificationItem
+import com.example.mapboxdemo2.date.model.NotificationType
 
 class NoticeAdapter(
     private val type: NotificationType,

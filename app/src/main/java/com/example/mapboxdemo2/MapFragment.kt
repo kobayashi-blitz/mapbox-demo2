@@ -108,6 +108,18 @@ import android.graphics.Point as AndroidPoint // ★修正: android.graphics.Poi
 import android.widget.ProgressBar  // ★追加
 import android.widget.Button         // ★追加
 
+import android.view.LayoutInflater
+
+import com.example.mapboxdemo2.data.db.AppDatabase
+
+import androidx.lifecycle.lifecycleScope
+import com.example.mapboxdemo2.model.MarkerData
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+import com.mapbox.maps.viewannotation.geometry
+import com.mapbox.maps.viewannotation.viewAnnotationOptions
 
 class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
@@ -522,7 +534,10 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     private var wheelIconResListForFunction = List(8) { R.drawable.marker_rsearch_facilityicon02 }
 
     var isNavigating = false
+
+    private val database: AppDatabase by lazy { AppDatabase.getDatabase(requireContext().applicationContext) }
     // --- marker wheel (circleContainer) 用プロパティ追加 ---
+    private val viewAnnotationManager: com.mapbox.maps.viewannotation.ViewAnnotationManager by lazy { mapView.viewAnnotationManager }
     private var isWheelEngaged = false
     private var lastAngle = 0f
     private var lastTime = 0L
@@ -1058,6 +1073,8 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
             false
         }
 
+        loadAndDisplayMarkers()
+
     }
 
 
@@ -1494,19 +1511,22 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
      * 表示中のバブルビューをすべて削除します。
      * バブルメニューを閉じた際、マーカーアイコンも同時に非表示にする。
      */
-    private fun removeBubbleViews() {
+    private fun removeBubbleViews(keepMarkerIcon: Boolean = false) {
         currentBubbleView?.let { (it.parent as? ViewGroup)?.removeView(it) }
         currentTitleView?.let { (it.parent as? ViewGroup)?.removeView(it) }
         currentMenuLayout?.let { (it.parent as? ViewGroup)?.removeView(it) }
         currentOverlayView?.let { (it.parent as? ViewGroup)?.removeView(it) }
-        // 地図上マーカーアイコンも削除
-        currentMarkerView?.let { (it.parent as? ViewGroup)?.removeView(it) }
 
         currentBubbleView = null
         currentTitleView = null
         currentMenuLayout = null
         currentOverlayView = null
-        currentMarkerView = null
+
+        // keepMarkerIconがfalseの場合のみ、マーカーアイコンを削除
+        if (!keepMarkerIcon) {
+            currentMarkerView?.let { (it.parent as? ViewGroup)?.removeView(it) }
+            currentMarkerView = null
+        }
     }
 
 
@@ -1636,6 +1656,18 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     override fun onPermissionResult(granted: Boolean) {
         if (granted) {
             enableLocationComponent()
+            moveToCurrentLocationOnce()
+
+            // ★★ タイムアウト処理を追加（3秒後に位置取得できなければエラーとする）
+            splashImageView?.postDelayed({
+                if (splashImageView != null) {
+                    // スプラッシュ画像を消してエラー表示
+                    val rootView = requireActivity().findViewById<FrameLayout>(android.R.id.content)
+                    rootView.removeView(splashImageView)
+                    splashImageView = null
+                    Toast.makeText(requireContext(), "現在地が取得できませんでした", Toast.LENGTH_LONG).show()
+                }
+            }, 3000L)
         } else {
             Snackbar.make(mapView, "位置情報の許可が必要です", Snackbar.LENGTH_INDEFINITE)
                 .setAction("設定") {
@@ -1763,14 +1795,14 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         dialog.show()
     }
 
+    // showBubbleMarkerAt メソッド全体を置き換え
     private fun showBubbleMarkerAt(point: Point, title: String = "") {
         followListener?.let {
             mapView.location.removeOnIndicatorPositionChangedListener(it)
             followListener = null
         }
-        currentBubbleView?.let {
-            (it.parent as? ViewGroup)?.removeView(it)
-        }
+        // 以前のバブルを消す
+        removeBubbleViews(keepMarkerIcon = true)
 
         val displayMetrics = requireContext().resources.displayMetrics
         val screenWidth = displayMetrics.widthPixels
@@ -1867,7 +1899,16 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
             }
 
             addView(createMenuButton(R.drawable.location_menu_regist) {
-                Toast.makeText(context, "場所を登録", Toast.LENGTH_SHORT).show()
+                // ★★★ この部分が修正点 ★★★
+                // Toast表示から、ボトムシートダイアログの呼び出しに変更
+                val defaultName = title.takeIf { it != "この場所" && it != "このグリッド" } ?: "マーカー"
+                val iconResId = R.drawable.baseline_map_24 // TODO: 本来のアイコンIDに差し替える
+                showRegisterMarkerDialog(
+                    defaultName = defaultName,
+                    iconResId = iconResId,
+                    lat = point.latitude(),
+                    lng = point.longitude()
+                )
             })
 
             addView(createMenuButton(R.drawable.location_menu_navi) {
@@ -1917,16 +1958,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
             bubbleRect.union(menuRect)
 
             if (!bubbleRect.contains(event.rawX.toInt(), event.rawY.toInt())) {
-                (imageView.parent as? ViewGroup)?.removeView(imageView)
-                (titleLayout.parent as? ViewGroup)?.removeView(titleLayout)
-                (menuLayout.parent as? ViewGroup)?.removeView(menuLayout)
-                (overlayView.parent as? ViewGroup)?.removeView(overlayView)
-                // 地図上マーカーアイコンも消す
-                currentMarkerView?.let { (it.parent as? ViewGroup)?.removeView(it) }
-                currentBubbleView = null
-                highlightedGridPolygon = null
-                currentMarkerView = null
-                drawGridOverlay()
+                removeBubbleViews()
                 return@setOnTouchListener true
             }
             false
@@ -2447,6 +2479,126 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         overlayContainer.bringToFront() // ★★★ この行を追記 ★★★
     }
 
+    // このメソッドをMapFragmentクラスの中に追加
+    private fun showRegisterMarkerDialog(
+        defaultName: String,
+        iconResId: Int,
+        lat: Double,
+        lng: Double
+    ) {
+        // 1. BottomSheetDialogのインスタンスを作成
+        val dialog = BottomSheetDialog(requireContext())
+
+        // 2. 先ほど修正したレイアウトファイルを読み込む
+        val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_marker_register, null)
+
+        // 3. レイアウト内のUI部品を取得
+        val imageViewMarker = dialogView.findViewById<ImageView>(R.id.imageView_marker)
+        val editTextName = dialogView.findViewById<EditText>(R.id.editText_name)
+        val editTextMemo = dialogView.findViewById<EditText>(R.id.editText_memo)
+        val registerButton = dialogView.findViewById<Button>(R.id.button_register)
+        val cancelButton = dialogView.findViewById<Button>(R.id.button_cancel)
+
+        // 4. 初期値を設定
+        imageViewMarker.setImageResource(iconResId)
+        editTextName.setText(defaultName)
+
+        // 5. 「登録」ボタンが押された時の処理
+        registerButton.setOnClickListener {
+            val name = editTextName.text.toString()
+            val memo = editTextMemo.text.toString()
+
+
+            // 今後の実装（MarkerDataを保存する処理）
+            val markerData = MarkerData(
+                name = name,
+                memo = memo,
+                iconResId = iconResId,
+                latitude = lat,
+                longitude = lng,
+                registrationDate = System.currentTimeMillis()
+            )
+            saveMarker(markerData)
+
+//            Toast.makeText(requireContext(), "$name を登録しました", Toast.LENGTH_SHORT).show()
+            removeBubbleViews(keepMarkerIcon = false)
+
+            // 処理が終わったらダイアログを閉じる
+            dialog.dismiss()
+        }
+
+        // 6. 「キャンセル」ボタンが押された時の処理
+        cancelButton.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        // 7. 作成したビューをダイアログにセットして表示
+        dialog.setContentView(dialogView)
+        dialog.show()
+    }
+
+    // --- 仮の保存関数（未定義の場合のみ） ---
+    private fun saveMarker(markerData: com.example.mapboxdemo2.model.MarkerData) {
+        // lifecycleScope.launchで、UIをブロックしないように非同期で処理します
+        lifecycleScope.launch(Dispatchers.IO) {
+            // データベースにデータを挿入
+            database.markerDao().insert(markerData)
+
+            // UI（Toast）の表示はメインスレッドに戻ってから行います
+            withContext(Dispatchers.Main) {
+                Toast.makeText(requireContext(), "'${markerData.name}' を保存しました", Toast.LENGTH_SHORT).show()
+                // ★★★ ここでマーカーを再読み込みして表示を更新する ★★★
+                loadAndDisplayMarkers()
+            }
+        }
+    }
+
+    /**
+     * データベースから全てのマーカーを読み込み、地図上に表示します。
+     */
+    private fun loadAndDisplayMarkers() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val markers = database.markerDao().getAllMarkers()
+
+            withContext(Dispatchers.Main) {
+                // 既存のマーカーを一度すべてクリア
+                viewAnnotationManager.removeAllViewAnnotations()
+
+                // 取得したマーカーを一つずつ地図に追加
+                for (markerData in markers) {
+                    addMarkerAnnotation(markerData)
+                }
+            }
+        }
+    }
+
+    /**
+     * 1つのマーカーデータを元に、地図上にマーカー（ViewAnnotation）を追加するヘルパー関数
+     */
+    private fun addMarkerAnnotation(markerData: MarkerData) {
+        val point = Point.fromLngLat(markerData.longitude, markerData.latitude)
+
+        // ViewAnnotationを作成し、先ほど作ったレイアウトを適用
+        val viewAnnotation = viewAnnotationManager.addViewAnnotation(
+            resId = R.layout.item_map_marker,
+            options = viewAnnotationOptions {
+                geometry(point)
+                allowOverlap(true) // 他のマーカーと重なっても表示
+            }
+        )
+
+        // レイアウト内のImageViewに、保存されたアイコンを設定
+        viewAnnotation.findViewById<ImageView>(R.id.marker_icon).setImageResource(markerData.iconResId)
+
+        // マーカーがクリックされた時の処理
+        viewAnnotation.setOnClickListener {
+            // ここでは簡単にトースト表示
+            Toast.makeText(requireContext(), markerData.name, Toast.LENGTH_SHORT).show()
+            true // イベントを消費したことを示す
+        }
+    }
+
+
 
 }
 
@@ -2531,5 +2683,8 @@ private fun pointFromGridId(id: String): Point {
 
 
 
-    // マーカーホイールのアイコンをモードに応じて切り替える
+// マーカーホイールのアイコンをモードに応じて切り替える
+
+
+
 

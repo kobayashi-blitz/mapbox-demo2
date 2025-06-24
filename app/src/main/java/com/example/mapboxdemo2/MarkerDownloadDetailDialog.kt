@@ -3,12 +3,11 @@ package com.example.mapboxdemo2
 import android.app.Dialog
 import android.os.Bundle
 import android.view.LayoutInflater
-import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Button
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
-import com.example.mapboxdemo2.model.MarkerDownloadItem
+import com.example.mapboxdemo2.date.model.MarkerDownloadItem
 
 class MarkerDownloadDetailDialog(
     private val markerItem: MarkerDownloadItem,

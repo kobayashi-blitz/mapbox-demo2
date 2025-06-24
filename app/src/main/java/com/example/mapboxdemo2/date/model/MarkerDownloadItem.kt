@@ -1,4 +1,4 @@
-package com.example.mapboxdemo2.model
+package com.example.mapboxdemo2.date.model
 
 data class MarkerDownloadItem(
     val thumbnailRes: Int,  // 画像リソースID

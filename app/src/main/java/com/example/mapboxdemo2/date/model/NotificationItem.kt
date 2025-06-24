@@ -1,4 +1,4 @@
-package com.example.mapboxdemo2.model
+package com.example.mapboxdemo2.date.model
 
 enum class NotificationType {
     NEWS,    // 運営からのお知らせ

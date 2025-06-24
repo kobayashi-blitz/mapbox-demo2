@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="48dp"
+    android:layout_height="48dp"
+    android:gravity="center">
+
+    <ImageView
+        android:id="@+id/marker_icon"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:layout_gravity="center"
+        android:contentDescription="Map Marker"
+        android:background="@drawable/circle_background"
+        android:padding="4dp"
+        android:elevation="4dp"/>
+
+</FrameLayout>

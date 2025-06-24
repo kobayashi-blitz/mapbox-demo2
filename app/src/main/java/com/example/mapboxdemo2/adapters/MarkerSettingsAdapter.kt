@@ -8,17 +8,16 @@ import android.widget.Switch
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.example.mapboxdemo2.R
-import com.example.mapboxdemo2.model.MarkerSetting
 
 class MarkerSettingsAdapter(
-    private val items: MutableList<MarkerSetting>,
-    private val onCheckedChange: (MarkerSetting, Boolean) -> Unit
+    private val items: MutableList<com.example.mapboxdemo2.date.model.DownloadedMarker>,
+    private val onCheckedChange: (com.example.mapboxdemo2.date.model.DownloadedMarker, Boolean) -> Unit
 ) : RecyclerView.Adapter<MarkerSettingsAdapter.VH>() {
 
-    private var onItemClickListener: ((MarkerSetting) -> Unit)? = null
+    private var onItemClickListener: ((com.example.mapboxdemo2.date.model.DownloadedMarker) -> Unit)? = null
 
     private var dragStartListener: ((RecyclerView.ViewHolder) -> Unit)? = null
-    fun setOnItemClickListener(listener: (MarkerSetting) -> Unit) {
+    fun setOnItemClickListener(listener: (com.example.mapboxdemo2.date.model.DownloadedMarker) -> Unit) {
         onItemClickListener = listener
     }
     fun setDragStartListener(listener: (RecyclerView.ViewHolder) -> Unit) {
@@ -53,9 +52,17 @@ class MarkerSettingsAdapter(
 
     override fun onBindViewHolder(holder: VH, position: Int) {
         val item = items[position]
-        holder.thumbnail.setImageResource(item.iconRes)
+        val context = holder.thumbnail.context
+        val filePath = item.filePath
+        val resourceName = filePath.substringAfterLast('/').substringBeforeLast(".png")
+        val resId = context.resources.getIdentifier(resourceName, "drawable", context.packageName)
+        if (resId != 0) {
+            holder.thumbnail.setImageResource(resId)
+        } else {
+            holder.thumbnail.setImageResource(0)
+        }
         holder.name.text = item.name
-        holder.toggle.isChecked = item.enabled
+        holder.toggle.isChecked = item.isVisible
         holder.toggle.setOnCheckedChangeListener { _, isChecked ->
             onCheckedChange(item, isChecked)
         }

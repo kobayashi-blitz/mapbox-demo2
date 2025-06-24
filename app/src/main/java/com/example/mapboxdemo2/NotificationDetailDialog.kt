@@ -6,7 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import com.example.mapboxdemo2.R
-import com.example.mapboxdemo2.model.NotificationItem
+import com.example.mapboxdemo2.date.model.NotificationItem
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 
 class NotificationDetailDialog(

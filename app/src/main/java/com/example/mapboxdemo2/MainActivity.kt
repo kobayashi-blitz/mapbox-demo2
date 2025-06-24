@@ -4,12 +4,16 @@ import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import androidx.appcompat.app.AlertDialog
+import com.example.mapboxdemo2.date.db.insertTestMarkers
 
 class MainActivity : AppCompatActivity() {
     var splashAlreadyShown: Boolean = false
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        // todo:テストデータの投入
+        insertTestMarkers(this)
 
         // 起動時は MapFragment を表示
         supportFragmentManager.beginTransaction()

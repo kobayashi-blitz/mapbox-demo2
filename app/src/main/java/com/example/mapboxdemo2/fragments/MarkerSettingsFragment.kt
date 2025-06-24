@@ -10,18 +10,17 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.ItemTouchHelper
 import com.example.mapboxdemo2.R
 import com.example.mapboxdemo2.adapters.MarkerSettingsAdapter
-import com.example.mapboxdemo2.model.MarkerSetting
+import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
+import com.example.mapboxdemo2.data.db.AppDatabase
+import com.example.mapboxdemo2.date.model.DownloadedMarker
 import java.util.*
 
 class MarkerSettingsFragment : Fragment() {
 
     private lateinit var recyclerView: RecyclerView
     private lateinit var adapter: MarkerSettingsAdapter
-    private val markerSettingsList = mutableListOf(
-        MarkerSetting(1, "サンプル登録1", R.drawable.ic_launcher_foreground, true),
-        MarkerSetting(2, "サンプル登録2", R.drawable.ic_launcher_foreground, true),
-        MarkerSetting(3, "サンプル登録3", R.drawable.ic_launcher_foreground, false)
-    )
+    private val markerSettingsList = mutableListOf<DownloadedMarker>()
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
@@ -36,10 +35,23 @@ class MarkerSettingsFragment : Fragment() {
 
         adapter = MarkerSettingsAdapter(markerSettingsList) { item, isChecked ->
             // ON/OFFトグルのコールバック例
-            item.enabled = isChecked
+            item.isVisible = isChecked
+            // DBにも反映させる場合は下記のようにする（例: 非同期で更新）
+            // viewLifecycleOwner.lifecycleScope.launch {
+            //     AppDatabase.getDatabase(requireContext()).downloadedMarkerDao().update(item)
+            // }
         }
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
         recyclerView.adapter = adapter
+
+        // DBからマーカー一覧を取得しリストに反映
+        viewLifecycleOwner.lifecycleScope.launch {
+            val db = AppDatabase.getDatabase(requireContext())
+            val allMarkers = db.downloadedMarkerDao().getAll()
+            markerSettingsList.clear()
+            markerSettingsList.addAll(allMarkers)
+            adapter.notifyDataSetChanged()
+        }
 
         // 並び替え（ドラッグ＆ドロップ）対応
         val itemTouchHelperCallback = object : ItemTouchHelper.SimpleCallback(

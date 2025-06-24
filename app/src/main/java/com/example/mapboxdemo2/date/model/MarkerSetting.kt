@@ -1,4 +1,4 @@
-package com.example.mapboxdemo2.model
+package com.example.mapboxdemo2.date.model
 
 data class MarkerSetting(
     val id: Int,
