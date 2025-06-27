@@ -10,7 +10,7 @@ import com.example.mapboxdemo2.date.db.MarkerCategoryConverter
 import androidx.room.TypeConverters
 
 @TypeConverters(MarkerCategoryConverter::class)
-@Database(entities = [MarkerData::class, DownloadedMarker::class], version = 2, exportSchema = false)
+@Database(entities = [MarkerData::class, DownloadedMarker::class], version = 6, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
     // このデータベースがどのDAO（命令書）を持つかを定義

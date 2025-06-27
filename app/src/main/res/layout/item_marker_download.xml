@@ -50,7 +50,7 @@
             android:id="@+id/markerPoint"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="必要ポイント：100pt"
+            android:text="必要チケット：1枚"
             android:textAlignment="center"
             android:textSize="12sp"
             android:textColor="#E57C23"

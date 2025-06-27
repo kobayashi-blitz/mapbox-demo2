@@ -10,8 +10,9 @@ data class MarkerData(
 
     val name: String,
     val memo: String,
-    val iconResId: Int,
+    val filePath: String,
     val latitude: Double,
     val longitude: Double,
     val registrationDate: Long
+
 )

@@ -22,8 +22,8 @@ class MyPageFragment : Fragment(R.layout.fragment_mypage) {
         val helpMenu = view.findViewById<TextView>(R.id.helpMenu)
         val tutorialMenu = view.findViewById<TextView>(R.id.tutorialMenu)
         val editProfileButton = view.findViewById<ImageButton>(R.id.editProfileButton)
-        val termsOfServiceMenu = view.findViewById<TextView>(R.id.termsOfServiceMenu) // ★追加
-        val privacyPolicyMenu = view.findViewById<TextView>(R.id.privacyPolicyMenu) // ★追加
+        val termsOfServiceMenu = view.findViewById<TextView>(R.id.termsOfServiceMenu)
+        val privacyPolicyMenu = view.findViewById<TextView>(R.id.privacyPolicyMenu)
 
 
         // --- 今後、ログイン状態に応じてUIを切り替える ---

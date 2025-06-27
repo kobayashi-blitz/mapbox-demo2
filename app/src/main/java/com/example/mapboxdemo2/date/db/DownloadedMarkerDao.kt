@@ -23,7 +23,16 @@ interface DownloadedMarkerDao {
     @Delete
     suspend fun delete(marker: DownloadedMarker)
 
+    @Query("SELECT * FROM downloaded_markers WHERE category = 0 ORDER BY displayOrder ASC LIMIT :limit")
+    suspend fun getLatestMarkers(limit: Int): List<DownloadedMarker>
+
     // 必要に応じてカテゴリ検索
     @Query("SELECT * FROM downloaded_markers WHERE category = :category ORDER BY displayOrder ASC")
     suspend fun getByCategory(category: Int): List<DownloadedMarker>
+    // 並び替え
+    @Update
+    suspend fun updateAll(markers: List<DownloadedMarker>)
+
+    @Query("SELECT * FROM downloaded_markers ORDER BY displayOrder ASC")
+    suspend fun getAllMarkers(): List<DownloadedMarker>
 }

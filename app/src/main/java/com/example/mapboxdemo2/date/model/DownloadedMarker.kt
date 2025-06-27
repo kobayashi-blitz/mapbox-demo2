@@ -13,5 +13,8 @@ data class DownloadedMarker(
     var isVisible: Boolean = true,
     val displayOrder: Int = 0,
     val memo: String = "",
-    val downloadedAt: Long = System.currentTimeMillis()
+    val downloadedAt: Long = System.currentTimeMillis(),
+    val functionType: String? = null,
+    val isUnlocked: Boolean = false,
+    val searchKeyword: String? = null,
 )

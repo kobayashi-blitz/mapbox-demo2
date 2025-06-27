@@ -28,6 +28,11 @@ class MainActivity : AppCompatActivity() {
         // ↓↓↓↓ 既存の setOnNavigationItemSelectedListener を、以下の setOnItemSelectedListener に置き換えてください ↓↓↓↓
 
         navView.setOnItemSelectedListener { item ->
+
+            if (item.itemId == navView.selectedItemId) {
+                return@setOnItemSelectedListener false // 同じアイテムが選択された場合は、何もしない
+            }
+
             // 現在表示されているFragmentを取得します
             val currentFragment = supportFragmentManager.findFragmentById(R.id.fragmentContainer)
 

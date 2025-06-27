@@ -17,6 +17,10 @@ class MarkerSettingsAdapter(
     private var onItemClickListener: ((com.example.mapboxdemo2.date.model.DownloadedMarker) -> Unit)? = null
 
     private var dragStartListener: ((RecyclerView.ViewHolder) -> Unit)? = null
+
+    // 並び替え後のリストをコールバックで通知するためのプロパティ
+    var onItemOrderChanged: ((List<com.example.mapboxdemo2.date.model.DownloadedMarker>) -> Unit)? = null
+
     fun setOnItemClickListener(listener: (com.example.mapboxdemo2.date.model.DownloadedMarker) -> Unit) {
         onItemClickListener = listener
     }
@@ -29,6 +33,8 @@ class MarkerSettingsAdapter(
         val item = items.removeAt(fromPosition)
         items.add(toPosition, item)
         notifyItemMoved(fromPosition, toPosition)
+        // 並び替え後のリストをコールバックで通知
+        onItemOrderChanged?.invoke(items)
     }
 
     inner class VH(view: View) : RecyclerView.ViewHolder(view) {

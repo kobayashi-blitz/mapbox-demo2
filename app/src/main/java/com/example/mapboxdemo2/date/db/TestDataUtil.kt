@@ -22,7 +22,10 @@ fun insertTestMarkers(context: Context) {
                     isVisible = true,
                     displayOrder = i,
                     memo = "テストデータ $i",
-                    downloadedAt = System.currentTimeMillis()
+                    downloadedAt = System.currentTimeMillis(),
+                    functionType = null,
+                    isUnlocked = false,
+                    searchKeyword = null
                 )
             }
             db.downloadedMarkerDao().insertAll(testData)

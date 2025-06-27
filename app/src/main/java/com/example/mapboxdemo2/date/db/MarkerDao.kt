@@ -3,6 +3,7 @@ package com.example.mapboxdemo2.data.db
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Update
 import com.example.mapboxdemo2.model.MarkerData
 
 @Dao
@@ -20,4 +21,10 @@ interface MarkerDao {
      */
     @Query("SELECT * FROM markers ORDER BY id DESC")
     suspend fun getAllMarkers(): List<MarkerData>
+
+    @Query("SELECT DISTINCT filePath FROM markers")
+    suspend fun getAllUniqueFilePaths(): List<String>
+
+    @Query("SELECT * FROM markers WHERE latitude BETWEEN :south AND :north AND longitude BETWEEN :west AND :east")
+    suspend fun getMarkersInBounds(north: Double, south: Double, east: Double, west: Double): List<MarkerData>
 }

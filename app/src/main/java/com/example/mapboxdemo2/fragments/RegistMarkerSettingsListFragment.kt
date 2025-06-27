@@ -17,9 +17,15 @@ import com.example.mapboxdemo2.data.db.AppDatabase
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import kotlinx.coroutines.launch
 
+import kotlinx.coroutines.Dispatchers
+import com.example.mapboxdemo2.model.MarkerData
+
+import android.util.Log
+
 class RegistMarkerSettingsListFragment : Fragment() {
     private lateinit var adapter: MarkerSettingsAdapter
     private var markerList: MutableList<DownloadedMarker> = mutableListOf()
+    private var originalMarkerDataList = listOf<MarkerData>()
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -34,8 +40,19 @@ class RegistMarkerSettingsListFragment : Fragment() {
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
 
         adapter = MarkerSettingsAdapter(markerList) { item, isChecked ->
-            // 切り替えイベント仮対応
+            // トグルスイッチ変更時にDBとリストを更新
+            viewLifecycleOwner.lifecycleScope.launch {
+                val db = AppDatabase.getDatabase(requireContext())
+                val updated = item.copy(isVisible = isChecked)
+                db.downloadedMarkerDao().update(updated)
+                val idx = markerList.indexOfFirst { it.id == item.id }
+                if (idx != -1) {
+                    markerList[idx] = updated
+                    adapter.notifyItemChanged(idx)
+                }
+            }
         }
+
         adapter.setOnItemClickListener { item ->
             showMarkerDetailDialog(item)
         }
@@ -47,6 +64,22 @@ class RegistMarkerSettingsListFragment : Fragment() {
             markerList.clear()
             markerList.addAll(data)
             adapter.notifyDataSetChanged()
+        }
+
+        // RegistMarkerSettingsListFragment.kt
+
+        adapter.onItemOrderChanged = { newList ->
+            viewLifecycleOwner.lifecycleScope.launch {
+                val db = AppDatabase.getDatabase(requireContext())
+                val updatedList = newList.mapIndexed { index, item -> item.copy(displayOrder = index) }
+
+                db.downloadedMarkerDao().updateAll(updatedList)
+                // markerListの順序をupdatedListに合わせて上書き（リスト再生成でなく順番入れ替え推奨）
+                for (i in updatedList.indices) {
+                    markerList[i] = updatedList[i]
+                }
+                adapter.notifyDataSetChanged()
+            }
         }
 
         val itemTouchHelperCallback = object : ItemTouchHelper.SimpleCallback(
@@ -61,26 +94,22 @@ class RegistMarkerSettingsListFragment : Fragment() {
                 viewHolder.itemView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
                 val fromPos = viewHolder.bindingAdapterPosition
                 val toPos = target.bindingAdapterPosition
-                if (fromPos < toPos) {
-                    for (i in fromPos until toPos) {
-                        val tmp = markerList[i]
-                        markerList[i] = markerList[i + 1]
-                        markerList[i + 1] = tmp
-                    }
-                } else {
-                    for (i in fromPos downTo toPos + 1) {
-                        val tmp = markerList[i]
-                        markerList[i] = markerList[i - 1]
-                        markerList[i - 1] = tmp
-                    }
-                }
+                java.util.Collections.swap(markerList, fromPos, toPos)
                 adapter.notifyItemMoved(fromPos, toPos)
+
                 return true
             }
 
             override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
                 // No swipe action
             }
+
+            override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
+                super.clearView(recyclerView, viewHolder)
+                // ドラッグ終了時にDBの並び順を更新
+                updateMarkerOrder()
+            }
+
         }
         val itemTouchHelper = ItemTouchHelper(itemTouchHelperCallback)
         itemTouchHelper.attachToRecyclerView(recyclerView)
@@ -99,4 +128,26 @@ class RegistMarkerSettingsListFragment : Fragment() {
         dialog.setContentView(view)
         dialog.show()
     }
+
+    private fun updateMarkerOrder() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val db = AppDatabase.getDatabase(requireContext())
+            // 新しい順番をdisplayOrderプロパティに再設定
+            val updatedList = markerList.mapIndexed { index, item ->
+                item.copy(displayOrder = index)
+            }
+            db.downloadedMarkerDao().updateAll(updatedList)
+            updateViewModel(updatedList)
+        }
+    }
+
+    /**
+     * 現在のリストの状態をViewModelに通知するメソッド
+     */
+    private fun updateViewModel(currentList: List<DownloadedMarker>) {
+        // ViewModelの処理は後で実装するため、一旦コメントアウト
+        // val wheelMarkers = currentList.filter { it.isVisible }.take(8)
+        // sharedViewModel.wheelMarkersLiveData.postValue(wheelMarkers)
+    }
+
 }

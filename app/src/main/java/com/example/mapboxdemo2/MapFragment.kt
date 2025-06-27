@@ -106,7 +106,7 @@ import kotlin.math.roundToInt
 import android.graphics.Point as AndroidPoint // ★修正: android.graphics.Point に別名 'AndroidPoint' を付けてインポート
 
 import android.widget.ProgressBar  // ★追加
-import android.widget.Button         // ★追加
+import android.widget.Button
 
 import android.view.LayoutInflater
 
@@ -121,7 +121,23 @@ import kotlinx.coroutines.withContext
 import com.mapbox.maps.viewannotation.geometry
 import com.mapbox.maps.viewannotation.viewAnnotationOptions
 
+import androidx.appcompat.content.res.AppCompatResources
+import com.google.gson.JsonObject
+import com.mapbox.geojson.Feature
+import com.mapbox.geojson.FeatureCollection
+import com.mapbox.maps.RenderedQueryGeometry
+import com.mapbox.maps.RenderedQueryOptions
+import com.mapbox.maps.extension.style.layers.generated.symbolLayer
+import android.widget.ListView
+import android.widget.ArrayAdapter
+
+
 class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
+
+    private val MARKER_SOURCE_ID = "marker-source"
+    private val MARKER_LAYER_ID = "marker-layer"
+    private val MARKER_ICON_PROPERTY = "icon_id"
+    private val MARKER_NAME_PROPERTY = "marker_name"
 
     // ドロップしたマーカーの座標を保持
     private var droppedMarkerLatLng: Point? = null
@@ -517,6 +533,9 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     private var allowedDirection = 0
     private lateinit var icons: List<ImageView>
 
+    // 追加: ドラッグされたアイコンのfilePathを保持
+    private var selectedWheelFilePath: String? = null
+
     // 各モードごとの初期アイコンリスト（将来DB/APIのデータでここを差し替える想定）
     // 例: wheelIconResListForRegisterは「登録」モード用、wheelIconResListForSearchは「検索」モード用、wheelIconResListForFunctionは「機能」モード用
     // 今後はこのリストをDBやAPIからユーザーごとに動的に取得し、差し替えて運用できる構造です
@@ -556,6 +575,8 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         R.drawable.wheel_search,
         R.drawable.wheel_function
     )
+
+    private var isGridTapAnimationInProgress = false
 
     /**
      * 画面表示範囲にズームレベルに応じた絶対グリッド（5m/50m/500m/5km）を描画します。
@@ -730,7 +751,8 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         setupButtonListeners()
         sensorManager = requireContext().getSystemService(Context.SENSOR_SERVICE) as SensorManager
 
-        sharedPreferences = requireContext().getSharedPreferences("search_prefs", Context.MODE_PRIVATE)
+        sharedPreferences =
+            requireContext().getSharedPreferences("search_prefs", Context.MODE_PRIVATE)
 
         // 検索ダイアログアイコンの表示＆クリックリスナー
         val searchDialogButton = view.findViewById<ImageButton>(R.id.showSearchDialogButton)
@@ -774,6 +796,8 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         icons.forEach { icon ->
             icon.setOnLongClickListener { v ->
                 v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                // ドラッグ元アイコンのfilePathを保存
+                selectedWheelFilePath = v.getTag(R.id.tag_file_path) as? String
                 val item = android.content.ClipData.Item(v.tag as? CharSequence)
                 val dragData = android.content.ClipData(
                     v.tag as? CharSequence,
@@ -896,10 +920,10 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                     fling.start()
                     true
                 }
+
                 else -> false
             }
         }
-
 
 
         // --- ドラッグ＆ドロップ: マップへのドロップでバブル表示 ---
@@ -925,6 +949,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                     currentMarkerView = markerView // このViewがドラッグ中の上部のアイコンとなる
                     true
                 }
+
                 android.view.DragEvent.ACTION_DRAG_LOCATION -> {
                     // ドラッグ中：指より少し上に仮マーカーを表示
                     // ★維持: currentMarkerView の位置をオフセット付きで更新する
@@ -940,6 +965,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                     markerView.requestLayout()
                     true
                 }
+
                 android.view.DragEvent.ACTION_DROP -> {
                     // 86pxオフセットを適用して地図座標へ変換
                     val x = event.x
@@ -958,13 +984,18 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                     // --- 機能マーカーモード時は FunctionNavigation を呼び出す ---
                     if (markerModeIndex == 2) {
                         val iconIndex = icons.indexOfFirst { it.isPressed }
-                        val action = com.example.mapboxdemo2.feature.FunctionNavigation { origin, dest ->
-                            drawRouteLine(origin, dest)
-                        }
+                        val action =
+                            com.example.mapboxdemo2.feature.FunctionNavigation { origin, dest ->
+                                drawRouteLine(origin, dest)
+                            }
                         currentLocation?.let { origin ->
                             action.execute(requireContext(), markerPoint, mapOf("origin" to origin))
                         } ?: run {
-                            Toast.makeText(requireContext(), "現在地が取得できません", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                requireContext(),
+                                "現在地が取得できません",
+                                Toast.LENGTH_SHORT
+                            ).show()
                         }
                         isDraggingIcon = false
                         return@setOnDragListener true
@@ -986,6 +1017,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                     isDraggingIcon = false
                     true
                 }
+
                 android.view.DragEvent.ACTION_DRAG_ENDED -> {
                     // ドラッグが終了した場合の処理
                     // ★修正: ドロップされずに終わった場合のみ currentMarkerView を削除する
@@ -997,6 +1029,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                     isDraggingIcon = false
                     true
                 }
+
                 else -> true
             }
         }
@@ -1017,80 +1050,93 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         }
 
 
-
         // --- グリッドタップでハイライト ---
-        mapView.getMapboxMap().addOnMapClickListener { point: Point ->
-            // ★ナビ中はグリッドタップ無効化
-            if (isNavigating) return@addOnMapClickListener false
-            val style = mapView.getMapboxMap().getStyle() ?: return@addOnMapClickListener false
+        // ↓↓↓↓ このブロック全体を置き換えます ↓↓↓↓
+        mapView.getMapboxMap().addOnMapClickListener { point ->
             val zoom = mapView.getMapboxMap().cameraState.zoom
-            if (zoom < 19.0) {
-                highlightedGridPolygon = null
-                drawGridOverlay()
-                return@addOnMapClickListener false
+
+            if (zoom >= 19.0) {
+                // 【5mグリッドの場合】ハイライトとバブルメニュー表示
+                handle5mGridTap(point)
+            } else if (zoom >= 11.0) {
+                // 【50m以上のグリッドの場合】マーカー一覧表示
+                handleLargeGridTap(point)
             }
-            // グリッド描画と同じ基準（lat0=20.0, lng0=122.0）でグリッドサイズ再計算
-            val gridSizeMeters = 5.0
-            val lat0 = 20.0
-            val lng0 = 122.0
-            val metersPerDegreeLat = 111132.0
-            val metersPerDegreeLng = 111320.0 * Math.cos(Math.toRadians(lat0))
-            val dLat = gridSizeMeters / metersPerDegreeLat
-            val dLng = gridSizeMeters / metersPerDegreeLng
+            // 上記以外（ズームアウト時など）は何もしない
 
-            // タップ位置から「このグリッドの左上」を計算
-            val gridY = Math.floor((point.latitude() - lat0) / dLat)
-            val gridX = Math.floor((point.longitude() - lng0) / dLng)
-            val gridLat0 = lat0 + gridY * dLat
-            val gridLng0 = lng0 + gridX * dLng
-            val gridLat1 = gridLat0 + dLat
-            val gridLng1 = gridLng0 + dLng
-
-            // グリッドの中心座標
-            val centerLat = (gridLat0 + gridLat1) / 2.0
-            val centerLng = (gridLng0 + gridLng1) / 2.0
-            val gridCenter = Point.fromLngLat(centerLng, centerLat)
-
-            // グリッドをハイライト
-            highlightedGridPolygon = com.mapbox.geojson.Polygon.fromLngLats(
-                listOf(
-                    listOf(
-                        com.mapbox.geojson.Point.fromLngLat(gridLng0, gridLat0),
-                        com.mapbox.geojson.Point.fromLngLat(gridLng1, gridLat0),
-                        com.mapbox.geojson.Point.fromLngLat(gridLng1, gridLat1),
-                        com.mapbox.geojson.Point.fromLngLat(gridLng0, gridLat1),
-                        com.mapbox.geojson.Point.fromLngLat(gridLng0, gridLat0)
-                    )
-                )
-            )
-            drawGridOverlay()
-
-            // 地図をグリッド中央にアニメーション移動
-            animateCameraToPosition(gridCenter) {
-                // アニメーション終了後にバブルメニュー表示
-                showBubbleMarkerAt(gridCenter, "このグリッド")
-            }
-            false
+            false // クリックイベントを消費
         }
-
-        loadAndDisplayMarkers()
-
     }
 
 
     /**
      * ホイールUIの周囲アイコン画像をモードごとに切り替える。
-     * このリストは将来的にDBやAPIからユーザーごとに差し替えられる構成です。
+     * カテゴリ0（登録）はDBから最大8件の登録マーカー画像を使う。
+     * カテゴリ1・2は従来のハードコーディングリストでセット。
      */
     private fun updateWheelIcons(mode: Int) {
-        val resList = when (mode) {
-            0 -> wheelIconResListForRegister
-            1 -> wheelIconResListForSearch
-            2 -> wheelIconResListForFunction
-            else -> wheelIconResListForRegister
+        when (mode) {
+            0 -> {
+                updateRegisterWheelIconsFromDb()
+            }
+            1 -> {
+                setIcons(wheelIconResListForSearch)
+            }
+            2 -> {
+                setIcons(wheelIconResListForFunction)
+            }
+            else -> {
+                setIcons(wheelIconResListForRegister)
+            }
         }
+    }
+
+    /**
+     * DBから「ON（isVisible=1）」のマーカーを最大8件取得し、icons配列に反映。
+     * 件数が8未満のときは残りをデフォルト画像で埋める。
+     * filePathもImageViewのtagにセット。
+     */
+    private fun updateRegisterWheelIconsFromDb() {
+        lifecycleScope.launch {
+            // DBからONのマーカーを最大8件取得
+            val markerList = withContext(Dispatchers.IO) {
+                database.downloadedMarkerDao().getVisible().take(8)
+            }
+            // filePathからdrawableリソースIDを取得し、filePathもセット
+            val iconResList = markerList.map { getDrawableResIdByFilePath(requireContext(), it.filePath) }
+            val filePathList = markerList.map { it.filePath }
+            // 8件に満たない場合はデフォルトで埋める
+            val filledList = iconResList.toMutableList()
+            val filledFilePathList = filePathList.toMutableList()
+            while (filledList.size < 8) {
+                filledList.add(R.drawable.baseline_map_24)
+                filledFilePathList.add("") // 空文字
+            }
+            // icons配列に画像とfilePathをセット
+            icons.forEachIndexed { i, iv ->
+                iv.setImageResource(filledList.getOrElse(i) { R.drawable.baseline_map_24 })
+                iv.setTag(R.id.tag_file_path, filledFilePathList.getOrElse(i) { "" })
+            }
+        }
+    }
+
+    /**
+     * filePathからdrawableリソースIDを取得する
+     */
+    private fun getDrawableResIdByFilePath(context: Context, filePath: String): Int {
+        val name = filePath.substringBeforeLast('.') // 拡張子除去
+        return context.resources.getIdentifier(name, "drawable", context.packageName)
+    }
+
+    /**
+     * icons配列（ImageView）に、与えられたリソースIDリストを順に反映する
+     * （filePathは空でセット）
+     */
+    private fun setIcons(iconResList: List<Int>) {
         icons.forEachIndexed { i, iv ->
-            iv.setImageResource(resList.getOrElse(i) { R.drawable.baseline_map_24 })
+            iv.setImageResource(iconResList.getOrElse(i) { R.drawable.baseline_map_24 })
+            // filePathは使わないので空文字をセット
+            iv.setTag(R.id.tag_file_path, "")
         }
     }
 
@@ -1104,7 +1150,13 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     private var splashImageView: ImageView? = null
 
     private fun initializeMap() {
-        mapView.mapboxMap.loadStyleUri("mapbox://styles/blitz-k/cmbercg9l004a01sn6jk01cc9") {
+        mapView.mapboxMap.loadStyleUri("mapbox://styles/blitz-k/cmbercg9l004a01sn6jk01cc9") { style ->
+
+            registerMarkerIcons(style) // プロジェクト内の画像をスタイルに登録
+            setupSymbolLayer(style)    // SymbolLayerを初期化
+
+            loadAndDisplayMarkers()
+
             // 縮尺バーを非表示にする
             mapView.getPlugin<ScaleBarPlugin>(Plugin.MAPBOX_SCALEBAR_PLUGIN_ID)?.updateSettings {
                 enabled = false
@@ -1114,13 +1166,17 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                 rotateEnabled = false
             }
 
+
+
             // グリッド描画（初回表示時）
             drawGridOverlay()
 
             // カメラ移動・ズーム変更ごとにグリッドを再描画
             mapView.getMapboxMap().addOnCameraChangeListener {
+                if (isGridTapAnimationInProgress) return@addOnCameraChangeListener
                 drawGridOverlay()
                 updateMarkerViewPosition()
+
             }
 
             val mainActivity = requireActivity() as? MainActivity
@@ -1285,6 +1341,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                     dialog.dismiss()
                     animateCameraToPosition(center) {
                         showBubbleMarkerAt(center, "このグリッド")
+                        isGridTapAnimationInProgress = false
                     }
                 }
                 .setNegativeButton("いいえ") { dialog, _ ->
@@ -1511,7 +1568,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
      * 表示中のバブルビューをすべて削除します。
      * バブルメニューを閉じた際、マーカーアイコンも同時に非表示にする。
      */
-    private fun removeBubbleViews(keepMarkerIcon: Boolean = false) {
+    private fun removeBubbleViews(keepMarkerIcon: Boolean = false, clearHighlight: Boolean = true) {
         currentBubbleView?.let { (it.parent as? ViewGroup)?.removeView(it) }
         currentTitleView?.let { (it.parent as? ViewGroup)?.removeView(it) }
         currentMenuLayout?.let { (it.parent as? ViewGroup)?.removeView(it) }
@@ -1522,10 +1579,15 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         currentMenuLayout = null
         currentOverlayView = null
 
-        // keepMarkerIconがfalseの場合のみ、マーカーアイコンを削除
         if (!keepMarkerIcon) {
             currentMarkerView?.let { (it.parent as? ViewGroup)?.removeView(it) }
             currentMarkerView = null
+        }
+
+        // clearHighlightがtrueの場合のみ、ハイライトを削除
+        if (clearHighlight) {
+            highlightedGridPolygon = null
+            drawGridOverlay()
         }
     }
 
@@ -1802,7 +1864,8 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
             followListener = null
         }
         // 以前のバブルを消す
-        removeBubbleViews(keepMarkerIcon = true)
+        // 古いバブルを消すが、ハイライトは消さないようにする
+        removeBubbleViews(keepMarkerIcon = true, clearHighlight = false)
 
         val displayMetrics = requireContext().resources.displayMetrics
         val screenWidth = displayMetrics.widthPixels
@@ -1899,16 +1962,16 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
             }
 
             addView(createMenuButton(R.drawable.location_menu_regist) {
-                // ★★★ この部分が修正点 ★★★
-                // Toast表示から、ボトムシートダイアログの呼び出しに変更
                 val defaultName = title.takeIf { it != "この場所" && it != "このグリッド" } ?: "マーカー"
-                val iconResId = R.drawable.baseline_map_24 // TODO: 本来のアイコンIDに差し替える
+                // ★ここを修正★
+                val filePath = selectedWheelFilePath ?: "baseline_map_24.png"
                 showRegisterMarkerDialog(
                     defaultName = defaultName,
-                    iconResId = iconResId,
+                    filePath = filePath,
                     lat = point.latitude(),
                     lng = point.longitude()
                 )
+                selectedWheelFilePath = null // 登録後にリセット
             })
 
             addView(createMenuButton(R.drawable.location_menu_navi) {
@@ -2482,14 +2545,14 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     // このメソッドをMapFragmentクラスの中に追加
     private fun showRegisterMarkerDialog(
         defaultName: String,
-        iconResId: Int,
+        filePath: String,
         lat: Double,
         lng: Double
     ) {
         // 1. BottomSheetDialogのインスタンスを作成
         val dialog = BottomSheetDialog(requireContext())
 
-        // 2. 先ほど修正したレイアウトファイルを読み込む
+        // 2. レイアウトファイルを読み込む
         val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_marker_register, null)
 
         // 3. レイアウト内のUI部品を取得
@@ -2500,6 +2563,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         val cancelButton = dialogView.findViewById<Button>(R.id.button_cancel)
 
         // 4. 初期値を設定
+        val iconResId = if (filePath.isNullOrEmpty()) R.drawable.baseline_map_24 else getDrawableResIdByFilePath(requireContext(), filePath)
         imageViewMarker.setImageResource(iconResId)
         editTextName.setText(defaultName)
 
@@ -2508,21 +2572,17 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
             val name = editTextName.text.toString()
             val memo = editTextMemo.text.toString()
 
-
-            // 今後の実装（MarkerDataを保存する処理）
+            // MarkerDataを保存する処理
             val markerData = MarkerData(
                 name = name,
                 memo = memo,
-                iconResId = iconResId,
+                filePath = filePath,
                 latitude = lat,
                 longitude = lng,
                 registrationDate = System.currentTimeMillis()
             )
             saveMarker(markerData)
-
-//            Toast.makeText(requireContext(), "$name を登録しました", Toast.LENGTH_SHORT).show()
             removeBubbleViews(keepMarkerIcon = false)
-
             // 処理が終わったらダイアログを閉じる
             dialog.dismiss()
         }
@@ -2539,15 +2599,15 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
     // --- 仮の保存関数（未定義の場合のみ） ---
     private fun saveMarker(markerData: com.example.mapboxdemo2.model.MarkerData) {
-        // lifecycleScope.launchで、UIをブロックしないように非同期で処理します
         lifecycleScope.launch(Dispatchers.IO) {
-            // データベースにデータを挿入
+            // 1. DBへの挿入（バックグラウンド処理）
             database.markerDao().insert(markerData)
 
-            // UI（Toast）の表示はメインスレッドに戻ってから行います
+            // 2. DBへの書き込み完了後、メインスレッドに処理を切り替える
             withContext(Dispatchers.Main) {
                 Toast.makeText(requireContext(), "'${markerData.name}' を保存しました", Toast.LENGTH_SHORT).show()
-                // ★★★ ここでマーカーを再読み込みして表示を更新する ★★★
+
+                // 3. メインスレッドから、マーカーの再描画を指示する
                 loadAndDisplayMarkers()
             }
         }
@@ -2556,51 +2616,282 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     /**
      * データベースから全てのマーカーを読み込み、地図上に表示します。
      */
+
+    /**
+     * データベースから全てのマーカーを読み込み、地図上に表示します。
+     * この処理はUIスレッドから呼ばれることを前提とします。
+     */
     private fun loadAndDisplayMarkers() {
+        lifecycleScope.launch { // UIスレッドで開始
+            // DBからの読み込みだけをバックグラウンドで行う
+            val markers = withContext(Dispatchers.IO) {
+                database.markerDao().getAllMarkers()
+            }
+
+            // GeoJSONへの変換と、地図への反映はUIスレッドで行う
+            val features = mutableListOf<Feature>()
+            markers.forEach { markerData -> // isVisibleのチェックは一旦外します
+                val point = Point.fromLngLat(markerData.longitude, markerData.latitude)
+                val properties = JsonObject().apply {
+                    addProperty(MARKER_ICON_PROPERTY, markerData.filePath.substringBeforeLast('.'))
+                    addProperty(MARKER_NAME_PROPERTY, markerData.name)
+                }
+                features.add(Feature.fromGeometry(point, properties))
+            }
+
+            mapView.getMapboxMap().getStyle()?.getSourceAs<GeoJsonSource>(MARKER_SOURCE_ID)?.let {
+                it.featureCollection(FeatureCollection.fromFeatures(features))
+            }
+        }
+    }
+
+
+
+    /**
+     * drawableにあるマーカー画像を、Mapboxが認識できるIDでスタイルに登録する
+     */
+    private fun registerMarkerIcons(style: com.mapbox.maps.Style) {
         lifecycleScope.launch(Dispatchers.IO) {
-            val markers = database.markerDao().getAllMarkers()
+            // 1. DBから、重複しないfilePathのリストを取得
+            val imageFilePaths = database.markerDao().getAllUniqueFilePaths()
 
+            // 2. メインスレッドで、画像登録処理を実行
             withContext(Dispatchers.Main) {
-                // 既存のマーカーを一度すべてクリア
-                viewAnnotationManager.removeAllViewAnnotations()
+                imageFilePaths.forEach { filePath ->
+                    // 空のファイルパスは無視する
+                    if (filePath.isEmpty()) return@forEach
 
-                // 取得したマーカーを一つずつ地図に追加
-                for (markerData in markers) {
-                    addMarkerAnnotation(markerData)
+                    try {
+                        val imageName = filePath.substringBeforeLast('.')
+                        val drawable = AppCompatResources.getDrawable(requireContext(),
+                            resources.getIdentifier(imageName, "drawable", requireContext().packageName))
+
+                        drawable?.let {
+                            val bitmap = Bitmap.createBitmap(
+                                it.intrinsicWidth,
+                                it.intrinsicHeight,
+                                Bitmap.Config.ARGB_8888
+                            )
+                            val canvas = Canvas(bitmap)
+                            it.setBounds(0, 0, canvas.width, canvas.height)
+                            it.draw(canvas)
+                            style.addImage(imageName, bitmap)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("RegisterIconError", "Failed to load image: $filePath", e)
+                    }
                 }
             }
         }
     }
 
     /**
-     * 1つのマーカーデータを元に、地図上にマーカー（ViewAnnotation）を追加するヘルパー関数
+     * マーカー表示用のSymbolLayerを初期化する
      */
-    private fun addMarkerAnnotation(markerData: MarkerData) {
-        val point = Point.fromLngLat(markerData.longitude, markerData.latitude)
-
-        // ViewAnnotationを作成し、先ほど作ったレイアウトを適用
-        val viewAnnotation = viewAnnotationManager.addViewAnnotation(
-            resId = R.layout.item_map_marker,
-            options = viewAnnotationOptions {
-                geometry(point)
-                allowOverlap(true) // 他のマーカーと重なっても表示
+    private fun setupSymbolLayer(style: com.mapbox.maps.Style) {
+        style.addSource(geoJsonSource(MARKER_SOURCE_ID))
+        style.addLayer(
+            symbolLayer(MARKER_LAYER_ID, MARKER_SOURCE_ID) {
+                iconImage("{$MARKER_ICON_PROPERTY}") // {}でプロパティ名を囲む
+                iconSize(0.3)
+                iconAllowOverlap(true)
+                iconIgnorePlacement(true)
             }
         )
-
-        // レイアウト内のImageViewに、保存されたアイコンを設定
-        viewAnnotation.findViewById<ImageView>(R.id.marker_icon).setImageResource(markerData.iconResId)
-
-        // マーカーがクリックされた時の処理
-        viewAnnotation.setOnClickListener {
-            // ここでは簡単にトースト表示
-            Toast.makeText(requireContext(), markerData.name, Toast.LENGTH_SHORT).show()
-            true // イベントを消費したことを示す
-        }
     }
 
 
 
+    /**
+     * グリッドタップ時の処理
+     */
+    private fun handleGridTap(point: Point) {
+        if (isGridTapAnimationInProgress) return
+        val zoom = mapView.getMapboxMap().cameraState.zoom
+
+        // 5mグリッド(ズームレベル19以上)の場合は、これまで通りハイライトとバブルメニュー表示
+        if (zoom >= 19.0) {
+            val gridCenter = calculateGridCenter(point, 5.0)
+            highlightedGridPolygon = createGridPolygon(gridCenter, 5.0)
+
+            isGridTapAnimationInProgress = true
+            animateCameraToPosition(gridCenter) {
+                showBubbleMarkerAt(gridCenter, "このグリッド")
+                isGridTapAnimationInProgress = false
+            }
+            return
+        }
+
+        // 50m以上のグリッドが表示されるズームレベルか判定
+        if (zoom < 13.0) {
+            // ズームレベルが足りない場合はハイライトを消すだけ
+            highlightedGridPolygon = null
+            drawGridOverlay()
+            return
+        }
+
+        // ズームレベルに応じたグリッドサイズを決定
+        val gridSizeMeters = when {
+            zoom >= 16.0 -> 50.0
+            else -> 500.0 // 5kmグリッドも一旦500mとして扱う（お好みで調整）
+        }
+
+        // タップされたグリッドの四隅の座標を計算
+        val gridBounds = calculateGridBounds(point, gridSizeMeters)
+
+        // DBに範囲内のマーカーを問い合わせる
+        lifecycleScope.launch(Dispatchers.IO) {
+            val markersInGrid = database.markerDao().getMarkersInBounds(
+                north = gridBounds.north,
+                south = gridBounds.south,
+                east = gridBounds.east,
+                west = gridBounds.west
+            )
+
+            withContext(Dispatchers.Main) {
+                if (markersInGrid.isNotEmpty()) {
+                    // マーカーが見つかったら、一覧表示ダイアログを出す
+                    showMarkersInGridDialog(markersInGrid)
+                } else {
+                    Toast.makeText(requireContext(), "このグリッドに登録マーカーはありません", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    // ...クラスの最後の部分...
+
+    // ↓↓↓↓ ここから3つのメソッドを丸ごと追記 ↓↓↓↓
+
+    /**
+     * グリッド計算用の四隅の座標を保持するデータクラス
+     */
+    private data class GridBounds(val north: Double, val south: Double, val east: Double, val west: Double)
+
+    /**
+     * タップされた座標とグリッドサイズから、そのグリッドの四隅の座標を計算する
+     */
+    private fun calculateGridBounds(point: Point, gridSizeMeters: Double): GridBounds {
+        val lat0 = 20.0
+        val lng0 = 122.0
+        val metersPerDegreeLat = 111132.0
+        val metersPerDegreeLng = 111320.0 * Math.cos(Math.toRadians(lat0))
+        val dLat = gridSizeMeters / metersPerDegreeLat
+        val dLng = gridSizeMeters / metersPerDegreeLng
+        val gridY = Math.floor((point.latitude() - lat0) / dLat)
+        val gridX = Math.floor((point.longitude() - lng0) / dLng)
+
+        val south = lat0 + gridY * dLat
+        val north = south + dLat
+        val west = lng0 + gridX * dLng
+        val east = west + dLng
+
+        return GridBounds(north, south, east, west)
+    }
+
+    /**
+     * グリッド内のマーカーリストをボトムシートに表示する
+     */
+    /**
+     * グリッド内のマーカーリストをボトムシートに表示する
+     */
+    private fun showMarkersInGridDialog(markers: List<MarkerData>) {
+        val dialog = BottomSheetDialog(requireContext())
+        val listView = android.widget.ListView(requireContext())
+
+        // 1. 現在地が取得できている場合は、マーカーリストを距離順に並び替える
+        val sortedMarkers = if (currentLocation != null) {
+            markers.sortedBy { distanceBetween(currentLocation!!, Point.fromLngLat(it.longitude, it.latitude)) }
+        } else {
+            // 現在地がなければ、元のリストのまま
+            markers
+        }
+
+        // 2. 並び替えた後のリストを使って、表示用のアイテムを作成する
+        val items = sortedMarkers.map {
+            val distanceStr = currentLocation?.let { loc ->
+                "(${distanceBetween(loc, Point.fromLngLat(it.longitude, it.latitude)).toInt()}m)"
+            } ?: ""
+            "${it.name}\n${it.memo} $distanceStr"
+        }
+
+        listView.adapter = android.widget.ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1, items)
+
+        dialog.setContentView(listView)
+        dialog.show()
+    }
+
+    /**
+     * 5mグリッドがタップされた時の処理（ハイライトとバブル表示）
+     */
+    private fun handle5mGridTap(point: Point) {
+        if (isGridTapAnimationInProgress) return
+
+        val gridBounds = calculateGridBounds(point, 5.0)
+        val centerLat = (gridBounds.south + gridBounds.north) / 2.0
+        val centerLng = (gridBounds.west + gridBounds.east) / 2.0
+        val gridCenter = Point.fromLngLat(centerLng, centerLat)
+
+        highlightedGridPolygon = com.mapbox.geojson.Polygon.fromLngLats(
+            listOf(
+                listOf(
+                    Point.fromLngLat(gridBounds.west, gridBounds.south),
+                    Point.fromLngLat(gridBounds.east, gridBounds.south),
+                    Point.fromLngLat(gridBounds.east, gridBounds.north),
+                    Point.fromLngLat(gridBounds.west, gridBounds.north),
+                    Point.fromLngLat(gridBounds.west, gridBounds.south)
+                )
+            )
+        )
+        drawGridOverlay() // ハイライトを即時反映
+
+        isGridTapAnimationInProgress = true
+        animateCameraToPosition(gridCenter) {
+            showBubbleMarkerAt(gridCenter, "このグリッド")
+            isGridTapAnimationInProgress = false
+        }
+    }
+
+    /**
+     * 50m以上のグリッドがタップされた時の処理（範囲検索と一覧表示）
+     */
+    /**
+     * 50m以上のグリッドがタップされた時の処理（範囲検索と一覧表示）
+     */
+    private fun handleLargeGridTap(point: Point) {
+        val zoom = mapView.getMapboxMap().cameraState.zoom
+
+        // ↓↓↓↓ このwhenブロックを修正します ↓↓↓↓
+        val gridSizeMeters = when {
+            zoom >= 16.0 -> 50.0
+            zoom >= 13.0 -> 500.0
+            else -> 5000.0 // ★ 5000mのケースを追加
+        }
+
+        val gridBounds = calculateGridBounds(point, gridSizeMeters)
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            val markersInGrid = database.markerDao().getMarkersInBounds(
+                north = gridBounds.north,
+                south = gridBounds.south,
+                east = gridBounds.east,
+                west = gridBounds.west
+            )
+            withContext(Dispatchers.Main) {
+                if (markersInGrid.isNotEmpty()) {
+                    showMarkersInGridDialog(markersInGrid)
+                } else {
+                    Toast.makeText(requireContext(), "このグリッドに登録マーカーはありません", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
 }
+
+
+
+
 
 
 
@@ -2680,11 +2971,56 @@ private fun pointFromGridId(id: String): Point {
     val lng = lng0 + x * dLng + dLng / 2.0
     return Point.fromLngLat(lng, lat)
 }
+/**
+ * タップされた座標とグリッドサイズから、そのグリッドの中心座標を計算する
+ */
+private fun calculateGridCenter(point: Point, gridSizeMeters: Double): Point {
+    val lat0 = 20.0
+    val lng0 = 122.0
+    val metersPerDegreeLat = 111132.0
+    val metersPerDegreeLng = 111320.0 * Math.cos(Math.toRadians(lat0))
+    val dLat = gridSizeMeters / metersPerDegreeLat
+    val dLng = gridSizeMeters / metersPerDegreeLng
+    val gridY = Math.floor((point.latitude() - lat0) / dLat)
+    val gridX = Math.floor((point.longitude() - lng0) / dLng)
+    val gridLat0 = lat0 + gridY * dLat
+    val gridLng0 = lng0 + gridX * dLng
+    val gridLat1 = gridLat0 + dLat
+    val gridLng1 = gridLng0 + dLng
+    val centerLat = (gridLat0 + gridLat1) / 2.0
+    val centerLng = (gridLng0 + gridLng1) / 2.0
+    return Point.fromLngLat(centerLng, centerLat)
+}
 
+/**
+ * グリッドの中心座標とサイズから、ハイライト表示用の四角形ポリゴンを作成する
+ */
+private fun createGridPolygon(gridCenter: Point, gridSizeMeters: Double): com.mapbox.geojson.Polygon {
+    val lat0 = 20.0
+    val lng0 = 122.0
+    val metersPerDegreeLat = 111132.0
+    val metersPerDegreeLng = 111320.0 * Math.cos(Math.toRadians(lat0))
+    val dLat = gridSizeMeters / metersPerDegreeLat
+    val dLng = gridSizeMeters / metersPerDegreeLng
 
+    // 中心座標からグリッドのインデックスを逆算
+    val gridY = Math.floor((gridCenter.latitude() - lat0) / dLat)
+    val gridX = Math.floor((gridCenter.longitude() - lng0) / dLng)
 
-// マーカーホイールのアイコンをモードに応じて切り替える
+    val gridLat0 = lat0 + gridY * dLat
+    val gridLng0 = lng0 + gridX * dLng
+    val gridLat1 = gridLat0 + dLat
+    val gridLng1 = gridLng0 + dLng
 
-
-
-
+    return com.mapbox.geojson.Polygon.fromLngLats(
+        listOf(
+            listOf(
+                Point.fromLngLat(gridLng0, gridLat0),
+                Point.fromLngLat(gridLng1, gridLat0),
+                Point.fromLngLat(gridLng1, gridLat1),
+                Point.fromLngLat(gridLng0, gridLat1),
+                Point.fromLngLat(gridLng0, gridLat0)
+            )
+        )
+    )
+}
