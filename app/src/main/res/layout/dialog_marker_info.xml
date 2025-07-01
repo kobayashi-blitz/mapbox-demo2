@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <ImageView
+        android:id="@+id/info_marker_image"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="16dp"
+        android:src="@drawable/baseline_map_24" />
+
+    <TextView
+        android:id="@+id/info_marker_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="マーカー名"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/black"
+        android:layout_gravity="center_horizontal"/>
+
+    <TextView
+        android:id="@+id/info_marker_memo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="メモの内容がここに表示されます。"
+        android:layout_marginTop="16dp"/>
+
+    <TextView
+        android:id="@+id/info_marker_date"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="登録日: 2025/01/01"
+        android:layout_marginTop="16dp"
+        android:textColor="@android:color/darker_gray"
+        android:layout_gravity="end"/>
+
+    <!-- 編集ボタン -->
+    <Button
+        android:id="@+id/button_edit_marker"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="編集"
+        android:layout_marginTop="24dp"/>
+
+
+</LinearLayout>

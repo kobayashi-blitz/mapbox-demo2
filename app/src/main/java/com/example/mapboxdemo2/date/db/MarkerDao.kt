@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
 import com.example.mapboxdemo2.model.MarkerData
+import androidx.room.Delete
 
 @Dao
 interface MarkerDao {
@@ -27,4 +28,13 @@ interface MarkerDao {
 
     @Query("SELECT * FROM markers WHERE latitude BETWEEN :south AND :north AND longitude BETWEEN :west AND :east")
     suspend fun getMarkersInBounds(north: Double, south: Double, east: Double, west: Double): List<MarkerData>
+
+    @Query("SELECT * FROM markers WHERE id = :markerId LIMIT 1")
+    suspend fun getMarkerById(markerId: Int): MarkerData?
+
+    @Delete
+    suspend fun delete(marker: MarkerData)
+
+    @Update
+    suspend fun update(marker: MarkerData)
 }

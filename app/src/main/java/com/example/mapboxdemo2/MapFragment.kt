@@ -105,7 +105,7 @@ import android.graphics.Outline
 import kotlin.math.roundToInt
 import android.graphics.Point as AndroidPoint // ★修正: android.graphics.Point に別名 'AndroidPoint' を付けてインポート
 
-import android.widget.ProgressBar  // ★追加
+import android.widget.ProgressBar
 import android.widget.Button
 
 import android.view.LayoutInflater
@@ -138,6 +138,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     private val MARKER_LAYER_ID = "marker-layer"
     private val MARKER_ICON_PROPERTY = "icon_id"
     private val MARKER_NAME_PROPERTY = "marker_name"
+    private var currentMapFeatures = mutableListOf<Feature>()
 
     // ドロップしたマーカーの座標を保持
     private var droppedMarkerLatLng: Point? = null
@@ -1451,11 +1452,11 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
      *
      * TODO: Add more details or parameters description if needed.
      */
-    private fun animateCameraToPosition(point: Point, onAnimationEnd: (() -> Unit)? = null) {
-        val currentZoom = mapView.getMapboxMap().cameraState.zoom
+    private fun animateCameraToPosition(point: Point, zoomLevel: Double? = null, onAnimationEnd: (() -> Unit)? = null) {
+        val targetZoom = zoomLevel ?: mapView.getMapboxMap().cameraState.zoom
         val cameraOptions = CameraOptions.Builder()
             .center(point)
-            .zoom(currentZoom)
+            .zoom(targetZoom)
             .build()
 
         val animationOptions = MapAnimationOptions.Builder()
@@ -1858,7 +1859,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     }
 
     // showBubbleMarkerAt メソッド全体を置き換え
-    private fun showBubbleMarkerAt(point: Point, title: String = "") {
+    private fun showBubbleMarkerAt(point: Point, title: String = "", showDetailInsteadOfRegister: Boolean = false) {
         followListener?.let {
             mapView.location.removeOnIndicatorPositionChangedListener(it)
             followListener = null
@@ -1961,17 +1962,35 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                 }
             }
 
-            addView(createMenuButton(R.drawable.location_menu_regist) {
-                val defaultName = title.takeIf { it != "この場所" && it != "このグリッド" } ?: "マーカー"
-                // ★ここを修正★
-                val filePath = selectedWheelFilePath ?: "baseline_map_24.png"
-                showRegisterMarkerDialog(
-                    defaultName = defaultName,
-                    filePath = filePath,
-                    lat = point.latitude(),
-                    lng = point.longitude()
-                )
-                selectedWheelFilePath = null // 登録後にリセット
+            val labelRes = if (showDetailInsteadOfRegister) R.drawable.location_menu_info else R.drawable.location_menu_regist
+            addView(createMenuButton(labelRes) {
+                if (showDetailInsteadOfRegister) {
+                    // 詳細ダイアログを表示する処理を呼ぶ
+                    // ★もしpointからid取得できる場合はidで呼ぶ。現状Pointのみ→一旦Point→id検索も可
+                    lifecycleScope.launch {
+                        val marker = withContext(Dispatchers.IO) {
+                            // 10m以内で一番近いマーカーを取得
+                            database.markerDao().getAllMarkers().minByOrNull {
+                                distanceBetween(point, Point.fromLngLat(it.longitude, it.latitude))
+                            }
+                        }
+                        if (marker != null) {
+                            showMarkerDetailDialog(marker.id)
+                        } else {
+                            Toast.makeText(requireContext(), "この位置の登録マーカー情報がありません", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } else {
+                    val defaultName = title.takeIf { it != "この場所" && it != "このグリッド" } ?: "マーカー"
+                    val filePath = selectedWheelFilePath ?: "baseline_map_24.png"
+                    showRegisterMarkerDialog(
+                        defaultName = defaultName,
+                        filePath = filePath,
+                        lat = point.latitude(),
+                        lng = point.longitude()
+                    )
+                    selectedWheelFilePath = null
+                }
             })
 
             addView(createMenuButton(R.drawable.location_menu_navi) {
@@ -2608,7 +2627,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                 Toast.makeText(requireContext(), "'${markerData.name}' を保存しました", Toast.LENGTH_SHORT).show()
 
                 // 3. メインスレッドから、マーカーの再描画を指示する
-                loadAndDisplayMarkers()
+                addSingleMarkerToMap(markerData)
             }
         }
     }
@@ -2621,26 +2640,26 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
      * データベースから全てのマーカーを読み込み、地図上に表示します。
      * この処理はUIスレッドから呼ばれることを前提とします。
      */
+    // ↓↓↓↓ このメソッド全体を、正しいコードに置き換えます ↓↓↓↓
     private fun loadAndDisplayMarkers() {
-        lifecycleScope.launch { // UIスレッドで開始
-            // DBからの読み込みだけをバックグラウンドで行う
+        lifecycleScope.launch {
             val markers = withContext(Dispatchers.IO) {
                 database.markerDao().getAllMarkers()
             }
 
-            // GeoJSONへの変換と、地図への反映はUIスレッドで行う
-            val features = mutableListOf<Feature>()
-            markers.forEach { markerData -> // isVisibleのチェックは一旦外します
+            // DBから読み込んだデータで、クラスが保持するFeatureリストを更新
+            currentMapFeatures = markers.map { markerData ->
                 val point = Point.fromLngLat(markerData.longitude, markerData.latitude)
                 val properties = JsonObject().apply {
                     addProperty(MARKER_ICON_PROPERTY, markerData.filePath.substringBeforeLast('.'))
                     addProperty(MARKER_NAME_PROPERTY, markerData.name)
                 }
-                features.add(Feature.fromGeometry(point, properties))
-            }
+                Feature.fromGeometry(point, properties)
+            }.toMutableList()
 
+            // 地図のデータソースを、更新されたリストで上書き
             mapView.getMapboxMap().getStyle()?.getSourceAs<GeoJsonSource>(MARKER_SOURCE_ID)?.let {
-                it.featureCollection(FeatureCollection.fromFeatures(features))
+                it.featureCollection(FeatureCollection.fromFeatures(currentMapFeatures))
             }
         }
     }
@@ -2792,32 +2811,81 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     /**
      * グリッド内のマーカーリストをボトムシートに表示する
      */
-    /**
-     * グリッド内のマーカーリストをボトムシートに表示する
-     */
+
     private fun showMarkersInGridDialog(markers: List<MarkerData>) {
         val dialog = BottomSheetDialog(requireContext())
-        val listView = android.widget.ListView(requireContext())
 
-        // 1. 現在地が取得できている場合は、マーカーリストを距離順に並び替える
+        // 1. 全体を包む親のレイアウトを作成 (縦並びのLinearLayout)
+        val containerLayout = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 32, 0, 32) // 上下に余白を追加
+        }
+
+        // 2. タイトル用のTextViewを作成
+        val titleView = TextView(requireContext()).apply {
+            text = "グリッド範囲登録一覧"
+            textSize = 20f
+            gravity = Gravity.CENTER
+            setTextColor(Color.BLACK)
+            setPadding(0, 0, 0, 32) // タイトルの下に余白
+        }
+
+        // 3. 親レイアウトにタイトルを追加
+        containerLayout.addView(titleView)
+
+        // 4. 区切り線を追加
+        val divider = View(requireContext()).apply {
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, 2) // 高さ2pxの線
+            setBackgroundColor(Color.LTGRAY)
+        }
+        containerLayout.addView(divider)
+
+
+        // 5. これまで通り、ListViewを作成
+        val listView = ListView(requireContext())
         val sortedMarkers = if (currentLocation != null) {
             markers.sortedBy { distanceBetween(currentLocation!!, Point.fromLngLat(it.longitude, it.latitude)) }
         } else {
-            // 現在地がなければ、元のリストのまま
             markers
         }
-
-        // 2. 並び替えた後のリストを使って、表示用のアイテムを作成する
         val items = sortedMarkers.map {
             val distanceStr = currentLocation?.let { loc ->
                 "(${distanceBetween(loc, Point.fromLngLat(it.longitude, it.latitude)).toInt()}m)"
             } ?: ""
             "${it.name}\n${it.memo} $distanceStr"
         }
+        listView.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1, items)
 
-        listView.adapter = android.widget.ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1, items)
+        // ★★★ リストの項目がタップされた時の処理を追加 ★★★
+        listView.setOnItemClickListener { _, _, position, _ ->
+            // 1. タップされたマーカーの情報を取得
+            val selectedMarker = sortedMarkers[position]
+            val targetPoint = Point.fromLngLat(selectedMarker.longitude, selectedMarker.latitude)
 
-        dialog.setContentView(listView)
+            // 2. ダイアログを閉じる
+            dialog.dismiss()
+
+            // 3. マーカーの位置にズームレベル17.0で移動する
+            animateCameraToPosition(targetPoint, zoomLevel = 17.0) {
+                // 詳細ダイアログをid指定で直接開く
+                showBubbleMarkerAt(targetPoint, selectedMarker.name, showDetailInsteadOfRegister = true)
+            }
+        }
+
+        // 6. 親レイアウトにListViewを追加
+        containerLayout.addView(listView)
+
+        // ダイアログが閉じられた時の処理を設定
+        dialog.setOnDismissListener {
+            // ハイライト情報をクリアして、グリッドを再描画する
+            highlightedGridPolygon = null
+            drawGridOverlay()
+        }
+
+        // 7. 親レイアウトをダイアログにセットして表示
+        dialog.setContentView(containerLayout)
+
+
         dialog.show()
     }
 
@@ -2870,6 +2938,21 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
         val gridBounds = calculateGridBounds(point, gridSizeMeters)
 
+        // ハイライト用のポリゴンを作成
+        highlightedGridPolygon = com.mapbox.geojson.Polygon.fromLngLats(
+            listOf(
+                listOf(
+                    Point.fromLngLat(gridBounds.west, gridBounds.south),
+                    Point.fromLngLat(gridBounds.east, gridBounds.south),
+                    Point.fromLngLat(gridBounds.east, gridBounds.north),
+                    Point.fromLngLat(gridBounds.west, gridBounds.north),
+                    Point.fromLngLat(gridBounds.west, gridBounds.south)
+                )
+            )
+        )
+        // グリッドを再描画して、ハイライトを即時反映させる
+        drawGridOverlay()
+
         lifecycleScope.launch(Dispatchers.IO) {
             val markersInGrid = database.markerDao().getMarkersInBounds(
                 north = gridBounds.north,
@@ -2881,18 +2964,150 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                 if (markersInGrid.isNotEmpty()) {
                     showMarkersInGridDialog(markersInGrid)
                 } else {
+                    // マーカーがなければ、ハイライトも消す
+                    highlightedGridPolygon = null
+                    drawGridOverlay()
                     Toast.makeText(requireContext(), "このグリッドに登録マーカーはありません", Toast.LENGTH_SHORT).show()
                 }
             }
         }
     }
 
+    // 詳細ダイアログ表示（id指定で取得）
+    private fun showMarkerDetailDialog(markerId: Int) {
+        lifecycleScope.launch {
+            val marker = withContext(Dispatchers.IO) {
+                database.markerDao().getMarkerById(markerId)
+            }
+            if (marker == null) {
+                Toast.makeText(requireContext(), "このIDの登録マーカーが見つかりません", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+
+            val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_marker_info, null)
+            val nameText = dialogView.findViewById<TextView>(R.id.info_marker_name)
+            val memoText = dialogView.findViewById<TextView>(R.id.info_marker_memo)
+            val dateText = dialogView.findViewById<TextView>(R.id.info_marker_date)
+            val imageView = dialogView.findViewById<ImageView>(R.id.info_marker_image)
+            val editButton = dialogView.findViewById<Button>(R.id.button_edit_marker)
+
+            nameText.text = marker.name
+            memoText.text = marker.memo
+            val sdf = java.text.SimpleDateFormat("yyyy/MM/dd HH:mm", java.util.Locale.getDefault())
+            dateText.text = "登録日: ${sdf.format(java.util.Date(marker.registrationDate))}"
+
+            val imageName = marker.filePath.substringBeforeLast('.', marker.filePath)
+            val resId = requireContext().resources.getIdentifier(imageName, "drawable", requireContext().packageName)
+            if (resId != 0) {
+                imageView.setImageResource(resId)
+            } else {
+                imageView.setImageResource(R.drawable.baseline_map_24)
+            }
+
+            val dialog = BottomSheetDialog(requireContext()).apply {
+                setContentView(dialogView)
+            }
+            // 編集ボタンのクリックリスナー
+            editButton?.setOnClickListener {
+                dialog.dismiss()
+                showEditMarkerDialog(marker)
+            }
+            dialog.show()
+        }
+    }
+
+    // 編集ダイアログの実装
+    private fun showEditMarkerDialog(markerData: MarkerData) {
+        val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_edit_regist_marker, null)
+        val nameEdit = dialogView.findViewById<EditText>(R.id.edit_marker_name)
+        val memoEdit = dialogView.findViewById<EditText>(R.id.edit_marker_memo)
+        val imageView = dialogView.findViewById<ImageView>(R.id.edit_marker_image)
+        val saveButton = dialogView.findViewById<Button>(R.id.button_save)
+        val deleteButton = dialogView.findViewById<Button>(R.id.button_delete)
+        val cancelButton = dialogView.findViewById<Button>(R.id.button_cancel)
+
+        nameEdit.setText(markerData.name)
+        memoEdit.setText(markerData.memo)
+        // 画像表示
+        val imageName = markerData.filePath.substringBeforeLast('.', markerData.filePath)
+        val resId = requireContext().resources.getIdentifier(imageName, "drawable", requireContext().packageName)
+        if (resId != 0) {
+            imageView.setImageResource(resId)
+        } else {
+            imageView.setImageResource(R.drawable.baseline_map_24)
+        }
+
+        val dialog = BottomSheetDialog(requireContext()).apply {
+            setContentView(dialogView)
+        }
+
+        saveButton.setOnClickListener {
+            val updatedMarker = markerData.copy(
+                name = nameEdit.text.toString(),
+                memo = memoEdit.text.toString()
+            )
+            lifecycleScope.launch(Dispatchers.IO) {
+                database.markerDao().update(updatedMarker)
+                withContext(Dispatchers.Main) {
+                    loadAndDisplayMarkers()
+                    dialog.dismiss()
+                    Toast.makeText(requireContext(), "マーカー情報を更新しました", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        deleteButton.setOnClickListener {
+            AlertDialog.Builder(requireContext())
+                .setMessage("本当に削除しますか？")
+                .setPositiveButton("削除") { _, _ ->
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        database.markerDao().delete(markerData)
+                        withContext(Dispatchers.Main) {
+                            loadAndDisplayMarkers()
+                            dialog.dismiss()
+                            removeBubbleViews()
+                            Toast.makeText(requireContext(), "マーカーを削除しました", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+                .setNegativeButton("キャンセル", null)
+                .show()
+        }
+
+        cancelButton.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        dialog.show()
+    }
+
+    /**
+     * 新しく保存された1件のマーカーを、既存のSymbolLayerに動的に追加する
+     */
+    // ↓↓↓↓ このメソッド全体を、正しいコードに置き換えます ↓↓↓↓
+    /**
+     * 新しく保存された1件のマーカーを、既存のSymbolLayerに動的に追加する
+     */
+    private fun addSingleMarkerToMap(markerData: MarkerData) {
+        val style = mapView.getMapboxMap().getStyle() ?: return
+        val source = style.getSourceAs<GeoJsonSource>(MARKER_SOURCE_ID) ?: return
+
+        // 新しいマーカーのGeoJSON Featureを作成
+        val point = Point.fromLngLat(markerData.longitude, markerData.latitude)
+        val properties = JsonObject().apply {
+            addProperty(MARKER_ICON_PROPERTY, markerData.filePath.substringBeforeLast('.'))
+            addProperty(MARKER_NAME_PROPERTY, markerData.name)
+        }
+        val newFeature = Feature.fromGeometry(point, properties)
+
+        // 現在のリストに、新しいFeatureを追加
+        currentMapFeatures.add(newFeature)
+
+        // 更新されたリストで、地図のデータソースを上書き
+        source.featureCollection(FeatureCollection.fromFeatures(currentMapFeatures))
+    }
+
 }
-
-
-
-
-
 
 
 /**
@@ -3024,3 +3239,4 @@ private fun createGridPolygon(gridCenter: Point, gridSizeMeters: Double): com.ma
         )
     )
 }
+
