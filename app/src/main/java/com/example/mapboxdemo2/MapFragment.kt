@@ -54,7 +54,6 @@ import android.text.TextUtils
 import android.view.Gravity
 import android.widget.TextView
 import android.widget.Toast
-import com.example.mapboxdemo2.feature.FunctionNavigation
 import androidx.core.content.res.ResourcesCompat
 import com.mapbox.search.common.AsyncOperationTask
 import android.widget.LinearLayout
@@ -103,7 +102,7 @@ import androidx.dynamicanimation.animation.SpringForce
 import android.view.ViewOutlineProvider
 import android.graphics.Outline
 import kotlin.math.roundToInt
-import android.graphics.Point as AndroidPoint // ★修正: android.graphics.Point に別名 'AndroidPoint' を付けてインポート
+import android.graphics.Point as AndroidPoint
 
 import android.widget.ProgressBar
 import android.widget.Button
@@ -118,27 +117,32 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-import com.mapbox.maps.viewannotation.geometry
-import com.mapbox.maps.viewannotation.viewAnnotationOptions
-
 import androidx.appcompat.content.res.AppCompatResources
 import com.google.gson.JsonObject
 import com.mapbox.geojson.Feature
 import com.mapbox.geojson.FeatureCollection
-import com.mapbox.maps.RenderedQueryGeometry
-import com.mapbox.maps.RenderedQueryOptions
+
 import com.mapbox.maps.extension.style.layers.generated.symbolLayer
 import android.widget.ListView
 import android.widget.ArrayAdapter
+import com.example.mapboxdemo2.adapters.MarkerFilterAdapter
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.fragment.app.activityViewModels
+import com.example.mapboxdemo2.ViewModel.MapStateViewModel
 
 
 class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
+
 
     private val MARKER_SOURCE_ID = "marker-source"
     private val MARKER_LAYER_ID = "marker-layer"
     private val MARKER_ICON_PROPERTY = "icon_id"
     private val MARKER_NAME_PROPERTY = "marker_name"
     private var currentMapFeatures = mutableListOf<Feature>()
+    private val mapStateViewModel: MapStateViewModel by activityViewModels()
+
+    private var editedImageFilePath: String? = null  // 一時保存用
+    private var editDialogImageView: ImageView? = null
 
     // ドロップしたマーカーの座標を保持
     private var droppedMarkerLatLng: Point? = null
@@ -152,11 +156,18 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     // 写真検索用リクエストコード
     private val REQUEST_CODE_PHOTO_SEARCH = 101
 
+    // マーカー画像の表示フィルタ用
+    private var visibleMarkerFilePaths: Set<String>? = null
+    // MapFragmentクラスのプロパティとして追加
+    private val selectedFilePaths = mutableSetOf<String>()
+
+    private var allMarkersFromDb: List<MarkerData> = emptyList()
+
     // ドロップされたマーカーの位置を画面上に再配置する
     private fun updateMarkerViewPosition() {
         val markerView = currentMarkerView ?: return
         val latLng = droppedMarkerLatLng ?: return
-        val screenPoint = mapView.getMapboxMap().pixelForCoordinate(latLng)
+        val screenPoint = mapView.mapboxMap.pixelForCoordinate(latLng)
         val markerSize = 48.dpToPx()
         (markerView.layoutParams as? FrameLayout.LayoutParams)?.apply {
             this.leftMargin = (screenPoint.x - markerSize / 2).toInt()
@@ -182,7 +193,6 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         }
     }
 
-    // この位置に入れる！
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_CODE_PHOTO_SEARCH && resultCode == Activity.RESULT_OK && data != null) {
@@ -195,7 +205,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                     if (exif.getLatLong(latLong)) {
                         val lat = latLong[0].toDouble()
                         val lng = latLong[1].toDouble()
-                        val point = com.mapbox.geojson.Point.fromLngLat(lng, lat)
+                        val point = Point.fromLngLat(lng, lat)
                         animateCameraToPosition(point) {
                             showBubbleMarkerAt(point, "写真の位置")
                         }
@@ -242,7 +252,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                             val lng = convertToDegree(longitude, lngRef)
                             // 2. 変換後直後ログ出力
                             Log.d("EXIF", "変換後: 緯度=$lat 経度=$lng")
-                            val point = com.mapbox.geojson.Point.fromLngLat(lng, lat)
+                            val point = Point.fromLngLat(lng, lat)
                             animateCameraToPosition(point) {
                                 showBubbleMarkerAt(point, "写真の位置")
                             }
@@ -265,7 +275,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         val view = activity.layoutInflater.inflate(R.layout.dialog_search_menu, null)
 
         // キーワードEditTextでエンター（検索）押下時の挙動を上書き
-        val keywordEditText = view.findViewById<android.widget.EditText>(R.id.keywordEditText)
+        val keywordEditText = view.findViewById<EditText>(R.id.keywordEditText)
         keywordEditText.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH) {
                 val keyword = keywordEditText.text.toString().trim()
@@ -301,7 +311,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                     val text = v.findViewById<TextView>(android.R.id.text1)
                 }
                 override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
-                    val v = android.view.LayoutInflater.from(parent.context).inflate(
+                    val v = LayoutInflater.from(parent.context).inflate(
                         android.R.layout.simple_list_item_1, parent, false
                     )
                     v.findViewById<TextView>(android.R.id.text1).apply {
@@ -345,7 +355,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
                 // --- ここから追加: スワイプ中の背景とアイコン描画 ---
                 override fun onChildDraw(
-                    c: android.graphics.Canvas,
+                    c: Canvas,
                     recyclerView: RecyclerView,
                     viewHolder: RecyclerView.ViewHolder,
                     dX: Float,
@@ -355,11 +365,11 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                 ) {
                     if (actionState == androidx.recyclerview.widget.ItemTouchHelper.ACTION_STATE_SWIPE) {
                         val itemView = viewHolder.itemView
-                        val icon = androidx.core.content.ContextCompat.getDrawable(activity, R.drawable.delete_24px)
+                        val icon = ContextCompat.getDrawable(activity, R.drawable.delete_24px)
                         val iconMargin = (itemView.height - (icon?.intrinsicHeight ?: 0)) / 2
 
                         val paint = android.graphics.Paint().apply {
-                            color = android.graphics.Color.parseColor("#F44336")
+                            color = Color.parseColor("#F44336")
                         }
                         if (dX > 0) {
                             // 右スワイプ
@@ -400,10 +410,50 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
             historyRecyclerView.visibility = View.GONE
         }
 
+        // --- マーカー画像フィルター機能（登録済みマーカー画像から絞り込み） ---
+        val markerFilterRecyclerView = view.findViewById<RecyclerView>(R.id.markerFilterRecyclerView)
+        markerFilterRecyclerView?.let { recyclerView ->
+            recyclerView.layoutManager = GridLayoutManager(context, 5)
+            lifecycleScope.launch {
+                val markerFilePaths = withContext(Dispatchers.IO) {
+                    database.markerDao().getAllUniqueFilePaths()
+                }
+
+
+                val prefs = requireActivity().getSharedPreferences("filter_prefs", Context.MODE_PRIVATE)
+                val savedSet = prefs.getStringSet("selected_marker_file_paths", null)
+
+                val selectedFilePaths = mutableSetOf<String>()
+
+                if (savedSet != null) {
+                    // 1. 保存された設定があり、かつ空でなければ、DBに存在するファイルパスだけを復元する
+                    selectedFilePaths.addAll(savedSet.filter { markerFilePaths.contains(it) })
+                }
+
+                // 2. もし復元した結果、選択されているものが一つもなければ（初回起動や、全マーカー削除後など）、
+                //    DBに存在する全てのマーカーを選択状態にする
+                if (selectedFilePaths.isEmpty()) {
+                    selectedFilePaths.addAll(markerFilePaths)
+                }
+
+                val markerFilterAdapter = MarkerFilterAdapter(
+                    markerFilePaths,
+                    selectedFilePaths
+                ) { checkedSet ->
+                    // 3. チェック状態が変更されたら、すぐにSharedPreferencesに保存する
+                    prefs.edit().putStringSet("selected_marker_file_paths", checkedSet).apply()
+                    filterMarkersOnMap(checkedSet)
+                }
+
+
+                recyclerView.adapter = markerFilterAdapter
+            }
+        }
+
         // フリーワード検索
-        view.findViewById<android.widget.Button>(R.id.keywordSearchButton).setOnClickListener {
+        view.findViewById<Button>(R.id.keywordSearchButton).setOnClickListener {
             dialog.dismiss()
-            performSearch(view.findViewById<android.widget.EditText>(R.id.keywordEditText).text.toString().trim())
+            performSearch(view.findViewById<EditText>(R.id.keywordEditText).text.toString().trim())
             // 履歴やUI更新はperformSearch内または呼び出し後に反映
         }
         dialog.setContentView(view)
@@ -419,10 +469,15 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         }
     }
 
+    // --- マーカー画像フィルター用: マップ上の表示を切り替える関数（仮実装） ---
+    private fun filterMarkersOnMap(selectedFilePaths: Set<String>?) {
+        visibleMarkerFilePaths = selectedFilePaths
+        loadAndDisplayMarkers() // ← 既存のマーカー再描画処理を呼ぶ
+    }
+
     /**
      * 検索マーカー設置時に近隣の駅を検索してリスト表示
      */
-    // 282行目からの searchNearbyStations メソッド全体を置き換え
     private fun searchNearbyStations(point: Point) {
         showLoading(true) // ★通信開始前にローディング表示
 
@@ -585,9 +640,9 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
      * すべてのグリッドサイズはgridOriginからの絶対位置で揃い、グリッドのズレは起きません。
      */
     private fun drawGridOverlay() {
-        val style = mapView.getMapboxMap().getStyle() ?: return
+        val style = mapView.mapboxMap.style ?: return
 
-        val zoom = mapView.getMapboxMap().cameraState.zoom
+        val zoom = mapView.mapboxMap.cameraState.zoom
 
         // グリッドサイズ切り替え: 19.0以上→5m, 16.0以上→50m, 13.0以上→500m, それ未満→5000m
         val gridSizeMeters = when {
@@ -612,16 +667,16 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         }
 
         // 画面中心取得
-        val center = mapView.getMapboxMap().cameraState.center
+        val center = mapView.mapboxMap.cameraState.center
         val latCenter = center.latitude()
 
         // 画面端の緯度経度（南西、北東）
-        val bounds = mapView.getMapboxMap().coordinateBoundsForCamera(
+        val bounds = mapView.mapboxMap.coordinateBoundsForCamera(
             CameraOptions.Builder()
                 .center(center)
-                .zoom(mapView.getMapboxMap().cameraState.zoom)
-                .bearing(mapView.getMapboxMap().cameraState.bearing)
-                .pitch(mapView.getMapboxMap().cameraState.pitch)
+                .zoom(mapView.mapboxMap.cameraState.zoom)
+                .bearing(mapView.mapboxMap.cameraState.bearing)
+                .pitch(mapView.mapboxMap.cameraState.pitch)
                 .build()
         )
         val minLat = bounds.southwest.latitude()
@@ -638,7 +693,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         val dLng = gridSizeMeters / metersPerDegreeLng
 
         // グリッドの絶対基準点（lat0, lng0）から一定ピッチで描画
-        val features = mutableListOf<com.mapbox.geojson.Feature>()
+        val features = mutableListOf<Feature>()
 
         // 経度方向（縦線）: 基準lng0からdLngごとに描画
         val minGridX = Math.ceil((minLng - lng0) / dLng).toInt()
@@ -647,11 +702,11 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
             val lng = lng0 + n * dLng
             val line = com.mapbox.geojson.LineString.fromLngLats(
                 listOf(
-                    com.mapbox.geojson.Point.fromLngLat(lng, minLat),
-                    com.mapbox.geojson.Point.fromLngLat(lng, maxLat)
+                    Point.fromLngLat(lng, minLat),
+                    Point.fromLngLat(lng, maxLat)
                 )
             )
-            features.add(com.mapbox.geojson.Feature.fromGeometry(line))
+            features.add(Feature.fromGeometry(line))
         }
 
         // 緯度方向（横線）: 基準lat0からdLatごとに描画
@@ -661,15 +716,15 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
             val lat = lat0 + m * dLat
             val line = com.mapbox.geojson.LineString.fromLngLats(
                 listOf(
-                    com.mapbox.geojson.Point.fromLngLat(minLng, lat),
-                    com.mapbox.geojson.Point.fromLngLat(maxLng, lat)
+                    Point.fromLngLat(minLng, lat),
+                    Point.fromLngLat(maxLng, lat)
                 )
             )
-            features.add(com.mapbox.geojson.Feature.fromGeometry(line))
+            features.add(Feature.fromGeometry(line))
         }
 
-        val featureCollection = com.mapbox.geojson.FeatureCollection.fromFeatures(features)
-        val source = com.mapbox.maps.extension.style.sources.generated.geoJsonSource(sourceId) {
+        val featureCollection = FeatureCollection.fromFeatures(features)
+        val source = geoJsonSource(sourceId) {
             featureCollection(featureCollection)
         }
         style.addSource(source)
@@ -679,7 +734,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         else
             "rgba(30, 80, 200, 0.18)" // 青
 
-        val layer = com.mapbox.maps.extension.style.layers.generated.lineLayer(layerId, sourceId) {
+        val layer = lineLayer(layerId, sourceId) {
             lineColor(gridLineColor)
             lineWidth(1.0)
         }
@@ -692,7 +747,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         if (style.styleLayerExists(highlightLayerId)) style.removeStyleLayer(highlightLayerId)
         if (style.styleSourceExists(highlightSourceId)) style.removeStyleSource(highlightSourceId)
         highlightedGridPolygon?.let { polygon ->
-            val highlightSource = com.mapbox.maps.extension.style.sources.generated.geoJsonSource(highlightSourceId) {
+            val highlightSource = geoJsonSource(highlightSourceId) {
                 geometry(polygon)
             }
             style.addSource(highlightSource)
@@ -722,13 +777,10 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
     /**
      * Activity 起動時の初期化処理を行います。
-     *
-     * TODO: Add more details or parameters description if needed.
      */
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // ←★この直後に下記を追記
         val searchMarkerButton = view.findViewById<ImageButton>(R.id.searchMarkerButton)
         searchMarkerButton.outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(view: View, outline: Outline) {
@@ -772,14 +824,14 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         }
 
         icons = listOf(
-            view.findViewById<ImageView>(R.id.icon1),
-            view.findViewById<ImageView>(R.id.icon2),
-            view.findViewById<ImageView>(R.id.icon3),
-            view.findViewById<ImageView>(R.id.icon4),
-            view.findViewById<ImageView>(R.id.icon5),
-            view.findViewById<ImageView>(R.id.icon6),
-            view.findViewById<ImageView>(R.id.icon7),
-            view.findViewById<ImageView>(R.id.icon8)
+            view.findViewById(R.id.icon1),
+            view.findViewById(R.id.icon2),
+            view.findViewById(R.id.icon3),
+            view.findViewById(R.id.icon4),
+            view.findViewById(R.id.icon5),
+            view.findViewById(R.id.icon6),
+            view.findViewById(R.id.icon7),
+            view.findViewById(R.id.icon8)
         )
 
         // 中央ボタンの初期化
@@ -971,7 +1023,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                     // 86pxオフセットを適用して地図座標へ変換
                     val x = event.x
                     val y = event.y - 86  // DRAG_LOCATIONの視覚的オフセットと一致させる
-                    val markerPoint = mapView.getMapboxMap().coordinateForPixel(
+                    val markerPoint = mapView.mapboxMap.coordinateForPixel(
                         com.mapbox.maps.ScreenCoordinate(x.toDouble(), y.toDouble())
                     )
                     droppedMarkerLatLng = markerPoint
@@ -1038,10 +1090,10 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
         // オーバーレイUIの紐付けとリスナー設定
         mapRootContainer = view.findViewById(R.id.mapRootContainer)
-        overlayContainer = view.findViewById<FrameLayout>(R.id.overlayContainer)
-        progressBar = view.findViewById<ProgressBar>(R.id.progressBar)
-        errorLayout = view.findViewById<LinearLayout>(R.id.errorLayout)
-        errorCloseButton = view.findViewById<Button>(R.id.errorCloseButton)
+        overlayContainer = view.findViewById(R.id.overlayContainer)
+        progressBar = view.findViewById(R.id.progressBar)
+        errorLayout = view.findViewById(R.id.errorLayout)
+        errorCloseButton = view.findViewById(R.id.errorCloseButton)
 
         errorCloseButton.setOnClickListener {
             overlayContainer.visibility = View.GONE
@@ -1052,9 +1104,8 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
 
         // --- グリッドタップでハイライト ---
-        // ↓↓↓↓ このブロック全体を置き換えます ↓↓↓↓
-        mapView.getMapboxMap().addOnMapClickListener { point ->
-            val zoom = mapView.getMapboxMap().cameraState.zoom
+        mapView.mapboxMap.addOnMapClickListener { point ->
+            val zoom = mapView.mapboxMap.cameraState.zoom
 
             if (zoom >= 19.0) {
                 // 【5mグリッドの場合】ハイライトとバブルメニュー表示
@@ -1097,26 +1148,37 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
      * 件数が8未満のときは残りをデフォルト画像で埋める。
      * filePathもImageViewのtagにセット。
      */
+    /**
+     * DBから「ON」の「登録済みマーカー」を取得し、ホイールのアイコンに反映する
+     */
     private fun updateRegisterWheelIconsFromDb() {
         lifecycleScope.launch {
-            // DBからONのマーカーを最大8件取得
-            val markerList = withContext(Dispatchers.IO) {
-                database.downloadedMarkerDao().getVisible().take(8)
+            val visibleMarkers = withContext(Dispatchers.IO) {
+                // ★★★ downloadedMarkerDaoではなく、markerDao を使うように修正 ★★★
+                database.downloadedMarkerDao().getAllMarkers()
+                    .filter { it.isVisible }
+                    .sortedBy { it.displayOrder }
             }
-            // filePathからdrawableリソースIDを取得し、filePathもセット
-            val iconResList = markerList.map { getDrawableResIdByFilePath(requireContext(), it.filePath) }
-            val filePathList = markerList.map { it.filePath }
-            // 8件に満たない場合はデフォルトで埋める
-            val filledList = iconResList.toMutableList()
-            val filledFilePathList = filePathList.toMutableList()
-            while (filledList.size < 8) {
-                filledList.add(R.drawable.baseline_map_24)
-                filledFilePathList.add("") // 空文字
+
+            if (visibleMarkers.isEmpty()) {
+                // 表示するマーカーがない場合は、何らかのデフォルト表示を行う
+                // （例：8つのスロットを全て最初の検索アイコンで埋める）
+                setIcons(wheelIconResListForSearch) // これは仮の処理です
+                return@launch
             }
+
+            // 表示ONのマーカーリストを、8つのスロットにループして割り当てる
+            val wheelFilePaths = mutableListOf<String>()
+            for (i in 0 until 8) {
+                wheelFilePaths.add(visibleMarkers[i % visibleMarkers.size].filePath)
+            }
+
             // icons配列に画像とfilePathをセット
             icons.forEachIndexed { i, iv ->
-                iv.setImageResource(filledList.getOrElse(i) { R.drawable.baseline_map_24 })
-                iv.setTag(R.id.tag_file_path, filledFilePathList.getOrElse(i) { "" })
+                val filePath = wheelFilePaths[i]
+                val iconResId = getDrawableResIdByFilePath(requireContext(), filePath)
+                iv.setImageResource(iconResId)
+                iv.setTag(R.id.tag_file_path, filePath)
             }
         }
     }
@@ -1145,8 +1207,6 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
     /**
      * Mapbox 地図のスタイル設定とジェスチャー設定を行います。
-     *
-     * TODO: Add more details or parameters description if needed.
      */
     private var splashImageView: ImageView? = null
 
@@ -1173,7 +1233,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
             drawGridOverlay()
 
             // カメラ移動・ズーム変更ごとにグリッドを再描画
-            mapView.getMapboxMap().addOnCameraChangeListener {
+            mapView.mapboxMap.addOnCameraChangeListener {
                 if (isGridTapAnimationInProgress) return@addOnCameraChangeListener
                 drawGridOverlay()
                 updateMarkerViewPosition()
@@ -1200,7 +1260,15 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
             if (checkLocationPermission()) {
                 enableLocationComponent()
-                moveToCurrentLocationOnce() // ← ★ 現在地に移動する処理を追加
+
+
+                if (!mapStateViewModel.isInitialCameraMoveDone) {
+                    moveToCurrentLocationOnce()
+                    mapStateViewModel.isInitialCameraMoveDone = true
+                }
+
+
+
                 mapView.location.addOnIndicatorPositionChangedListener {
                     currentLocation = it
                 }
@@ -1232,7 +1300,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
     // --- MapView/MapboxMap初期化時にズームレベル制限を設定 ---
     private fun setMapZoomBoundsOnce() {
-        mapView.getMapboxMap().setBounds(
+        mapView.mapboxMap.setBounds(
             com.mapbox.maps.CameraBoundsOptions.Builder()
                 .minZoom(12.0)
                 .maxZoom(19.5)
@@ -1245,13 +1313,13 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
      */
     private fun setupButtonListeners() {
         zoomInButton.setOnClickListener {
-            val zoom = mapView.getMapboxMap().cameraState.zoom + ZOOM_INCREMENT
-            mapView.getMapboxMap().setCamera(CameraOptions.Builder().zoom(zoom).build())
+            val zoom = mapView.mapboxMap.cameraState.zoom + ZOOM_INCREMENT
+            mapView.mapboxMap.setCamera(CameraOptions.Builder().zoom(zoom).build())
         }
 
         zoomOutButton.setOnClickListener {
-            val zoom = mapView.getMapboxMap().cameraState.zoom - ZOOM_INCREMENT
-            mapView.getMapboxMap().setCamera(CameraOptions.Builder().zoom(zoom).build())
+            val zoom = mapView.mapboxMap.cameraState.zoom - ZOOM_INCREMENT
+            mapView.mapboxMap.setCamera(CameraOptions.Builder().zoom(zoom).build())
         }
 
         myLocationButton.setOnClickListener {
@@ -1267,7 +1335,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
                 locationListener = OnIndicatorPositionChangedListener { point ->
                     currentLocation = point
-                    val currentZoom = mapView.getMapboxMap().cameraState.zoom
+                    val currentZoom = mapView.mapboxMap.cameraState.zoom
                     val cameraOptions = CameraOptions.Builder()
                         .center(point)
                         .zoom(currentZoom)
@@ -1275,7 +1343,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                     val animationOptions = MapAnimationOptions.Builder()
                         .duration(1000)
                         .build()
-                    mapView.getMapboxMap().flyTo(cameraOptions, animationOptions)
+                    mapView.mapboxMap.flyTo(cameraOptions, animationOptions)
 
                     // 一度カメラ移動したらリスナー削除
                     locationListener?.let {
@@ -1295,8 +1363,6 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
     /**
      * 検索クエリを実行し、結果をハンドリングします。
-     *
-     * TODO: Add more details or parameters description if needed.
      */
     private fun performSearch(query: String) {
         saveSearchHistory(query)
@@ -1330,11 +1396,11 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                     highlightedGridPolygon = com.mapbox.geojson.Polygon.fromLngLats(
                         listOf(
                             listOf(
-                                com.mapbox.geojson.Point.fromLngLat(gridLng0, gridLat0),
-                                com.mapbox.geojson.Point.fromLngLat(gridLng1, gridLat0),
-                                com.mapbox.geojson.Point.fromLngLat(gridLng1, gridLat1),
-                                com.mapbox.geojson.Point.fromLngLat(gridLng0, gridLat1),
-                                com.mapbox.geojson.Point.fromLngLat(gridLng0, gridLat0)
+                                Point.fromLngLat(gridLng0, gridLat0),
+                                Point.fromLngLat(gridLng1, gridLat0),
+                                Point.fromLngLat(gridLng1, gridLat1),
+                                Point.fromLngLat(gridLng0, gridLat1),
+                                Point.fromLngLat(gridLng0, gridLat0)
                             )
                         )
                     )
@@ -1351,7 +1417,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                     // 前の検索リクエストをキャンセル
                     searchRequestTask?.cancel()
 
-                    val center = mapView.getMapboxMap().cameraState.center
+                    val center = mapView.mapboxMap.cameraState.center
                     val options = SearchOptions.Builder()
                         .proximity(center)
                         .limit(10)
@@ -1397,11 +1463,10 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                 .show()
             return
         }
-        // --- ここから従来のフリーワード検索 ---
         // 前の検索リクエストをキャンセル
         searchRequestTask?.cancel()
 
-        val center = mapView.getMapboxMap().cameraState.center
+        val center = mapView.mapboxMap.cameraState.center
 
         val options = SearchOptions.Builder()
             .proximity(center)
@@ -1453,7 +1518,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
      * TODO: Add more details or parameters description if needed.
      */
     private fun animateCameraToPosition(point: Point, zoomLevel: Double? = null, onAnimationEnd: (() -> Unit)? = null) {
-        val targetZoom = zoomLevel ?: mapView.getMapboxMap().cameraState.zoom
+        val targetZoom = zoomLevel ?: mapView.mapboxMap.cameraState.zoom
         val cameraOptions = CameraOptions.Builder()
             .center(point)
             .zoom(targetZoom)
@@ -1463,7 +1528,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
             .duration(1000)
             .build()
 
-        mapView.getMapboxMap().flyTo(cameraOptions, animationOptions)
+        mapView.mapboxMap.flyTo(cameraOptions, animationOptions)
 
         // durationに合わせてバブルを表示する
         mapView.postDelayed({
@@ -1538,8 +1603,8 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         }
 
         followListener = OnIndicatorPositionChangedListener { point ->
-            val currentZoom = mapView.getMapboxMap().cameraState.zoom
-            mapView.getMapboxMap().setCamera(
+            val currentZoom = mapView.mapboxMap.cameraState.zoom
+            mapView.mapboxMap.setCamera(
                 CameraOptions.Builder()
                     .center(point)
                     .zoom(currentZoom)
@@ -1595,8 +1660,6 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
     /**
      * 位置情報権限のリクエストを行います。
-     *
-     * TODO: Add more details or parameters description if needed.
      */
     private fun requestLocationPermission() {
         permissionsManager = PermissionsManager(this)
@@ -1606,7 +1669,6 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     /**
      * API からルートデータを取得し、地図上にルート線を描画します。
      */
-    // 1339行目からの drawRouteLine メソッド全体を置き換え
     private fun drawRouteLine(origin: Point, destination: Point) {
         // UIスレッドでローディング表示
         requireActivity().runOnUiThread { showLoading(true) }
@@ -1633,8 +1695,8 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                     points.add(Point.fromLngLat(coord.getDouble(0), coord.getDouble(1)))
                 }
                 val routeLine = com.mapbox.geojson.LineString.fromLngLats(points)
-                val routeFeature = com.mapbox.geojson.Feature.fromGeometry(routeLine)
-                val featureCollection = com.mapbox.geojson.FeatureCollection.fromFeatures(arrayOf(routeFeature))
+                val routeFeature = Feature.fromGeometry(routeLine)
+                val featureCollection = FeatureCollection.fromFeatures(arrayOf(routeFeature))
                 val stepsArray = json.getJSONArray("routes").getJSONObject(0).getJSONArray("legs").getJSONObject(0).getJSONArray("steps")
                 navigationSteps.clear()
                 for (i in 0 until stepsArray.length()) {
@@ -1664,7 +1726,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                     removeBubbleViews()
                     val sourceId = "route-source"
                     val layerId = "route-layer"
-                    val style = mapView.getMapboxMap().getStyle() ?: return@runOnUiThread
+                    val style = mapView.mapboxMap.style ?: return@runOnUiThread
                     if (!style.styleSourceExists(sourceId)) {
                         val source = geoJsonSource(sourceId) { featureCollection(featureCollection) }
                         style.addSource(source)
@@ -1745,8 +1807,6 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
     /**
      * Activity の onStart ライフサイクル処理を行います。
-     *
-     * TODO: Add more details or parameters description if needed.
      */
     override fun onStart() {
         super.onStart()
@@ -1803,7 +1863,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         if (!isAdded) return
         val dialog = BottomSheetDialog(requireContext())
         val view = requireActivity().layoutInflater.inflate(R.layout.dialog_search_results, null)
-        val listView = view.findViewById<android.widget.ListView>(R.id.searchResultsListView)
+        val listView = view.findViewById<ListView>(R.id.searchResultsListView)
 
         val current = currentLocation
 
@@ -1817,7 +1877,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
             "${result.name} $distance"
         }
 
-        listView.adapter = android.widget.ArrayAdapter(
+        listView.adapter = ArrayAdapter(
             requireContext(),
             android.R.layout.simple_list_item_1,
             displayList
@@ -2056,8 +2116,6 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
     /**
      * ナビキャンセルボタンを表示します。
-     *
-     * TODO: Add more details or parameters description if needed.
      */
     private fun showCancelNaviButton() {
         if (cancelNaviButton != null) return
@@ -2092,8 +2150,6 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
     /**
      * AR オーバーレイ画像を非表示にします。
-     *
-     * TODO: Add more details or parameters description if needed.
      */
     private fun hideArDirectionOverlay() {
         arOverlayView?.let { (it.parent as? ViewGroup)?.removeView(it) }
@@ -2114,7 +2170,6 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
      *  - 不要なsetBackgroundColor(Color.TRANSPARENT)は削除。
      */
     private fun showArDirectionOverlay() {
-        // Always hide any existing overlay before adding new ones
         hideArDirectionOverlay()
 
         val rootView = requireActivity().findViewById<FrameLayout>(android.R.id.content)
@@ -2148,7 +2203,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
         // 3. 背景View（キャラクター画像の最下部まで高さ自動調整）
         arBackgroundView = object : View(requireContext()) {}.apply {
-            setBackgroundColor(android.graphics.Color.argb(51, 255, 255, 255)) // 20%透過白
+            setBackgroundColor(Color.argb(51, 255, 255, 255)) // 20%透過白
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT
@@ -2223,8 +2278,6 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
     /**
      * ナビゲーションを終了し、表示をリセットします。
-     *
-     * TODO: Add more details or parameters description if needed.
      */
     fun stopNavigation() {
         requireActivity().runOnUiThread {
@@ -2237,7 +2290,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         hideArDirectionOverlay() // 疑似AR画像非表示
 
         // ルート線を消す
-        val style = mapView.getMapboxMap().getStyle()
+        val style = mapView.mapboxMap.style
         style?.let {
             it.removeStyleLayer("route-layer")
             it.removeStyleSource("route-source")
@@ -2283,7 +2336,6 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     private var gridSizeLabel: TextView? = null
 
     // グリッドサイズラベルの表示・更新
-// グリッドサイズラベルの表示・更新
     private fun showOrUpdateGridSizeLabel(gridSizeMeters: Double) {
         val rootView = view?.findViewById<FrameLayout>(R.id.mapRootContainer) ?: return
         if (gridSizeLabel == null) {
@@ -2337,6 +2389,26 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         super.onResume()
         mapView.onStart()
 
+        // --- ここを追加（ズームや中心座標を復元） ---
+        mapStateViewModel.lastCameraCenter?.let { center ->
+            val zoom = mapStateViewModel.lastCameraZoom ?: DEFAULT_ZOOM
+            mapView.mapboxMap.setCamera(
+                CameraOptions.Builder()
+                    .center(center)
+                    .zoom(zoom)
+                    .build()
+            )
+            // 以降は初回移動フラグをfalseにしておくことで、無限ループしません
+            mapStateViewModel.isInitialCameraMoveDone = true
+        }
+
+        // ★ SharedPreferencesからフィルターの状態を読み込んで、クラスのプロパティを更新
+        val prefs = requireActivity().getSharedPreferences("filter_prefs", Context.MODE_PRIVATE)
+        visibleMarkerFilePaths = prefs.getStringSet("selected_marker_file_paths", null)
+
+        // ★ 更新されたフィルターを適用して、マーカーを再描画する
+        loadAndDisplayMarkers()
+
         // --- MapboxMapのズーム制限をスタイルロード完了時に一度だけ設定 ---
         // 既存の loadStyle コールバック内で呼ぶのが理想だが、なければここで一度呼ぶ
         // ただし、複数回呼ばれないように工夫する必要がある
@@ -2364,6 +2436,10 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     override fun onPause() {
         super.onPause()
         mapView.onStop()
+
+        val cameraState = mapView.mapboxMap.cameraState
+        mapStateViewModel.lastCameraCenter = cameraState.center
+        mapStateViewModel.lastCameraZoom = cameraState.zoom
 
         sensorManager.unregisterListener(sensorEventListener)
         // アプリが非表示になった際、もしナビゲーション中であれば自動的に終了させます。
@@ -2403,7 +2479,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         }
 
         val frameLayout = FrameLayout(requireContext())
-        val recyclerView = androidx.recyclerview.widget.RecyclerView(requireContext()).apply {
+        val recyclerView = RecyclerView(requireContext()).apply {
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT
@@ -2421,12 +2497,12 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         class HistoryAdapter(
             val items: MutableList<String>,
             val onClick: (String) -> Unit
-        ) : androidx.recyclerview.widget.RecyclerView.Adapter<HistoryAdapter.VH>() {
-            inner class VH(val view: View) : androidx.recyclerview.widget.RecyclerView.ViewHolder(view) {
+        ) : RecyclerView.Adapter<HistoryAdapter.VH>() {
+            inner class VH(val view: View) : RecyclerView.ViewHolder(view) {
                 val text: TextView = view.findViewById(android.R.id.text1)
             }
             override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
-                val v = android.view.LayoutInflater.from(parent.context).inflate(
+                val v = LayoutInflater.from(parent.context).inflate(
                     android.R.layout.simple_list_item_1, parent, false
                 )
                 v.findViewById<TextView>(android.R.id.text1).apply {
@@ -2457,8 +2533,8 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
         // スワイプ削除
         val itemTouchHelper = androidx.recyclerview.widget.ItemTouchHelper(object : androidx.recyclerview.widget.ItemTouchHelper.SimpleCallback(0, androidx.recyclerview.widget.ItemTouchHelper.LEFT or androidx.recyclerview.widget.ItemTouchHelper.RIGHT) {
-            override fun onMove(rv: androidx.recyclerview.widget.RecyclerView, vh: androidx.recyclerview.widget.RecyclerView.ViewHolder, target: androidx.recyclerview.widget.RecyclerView.ViewHolder) = false
-            override fun onSwiped(holder: androidx.recyclerview.widget.RecyclerView.ViewHolder, direction: Int) {
+            override fun onMove(rv: RecyclerView, vh: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder) = false
+            override fun onSwiped(holder: RecyclerView.ViewHolder, direction: Int) {
                 adapter.removeAt(holder.adapterPosition)
                 if (historyList.isEmpty()) {
                     alertDialog?.dismiss()
@@ -2484,8 +2560,6 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
 
     /**
      * 現在の方向と目的地ベアリングを比較し、キャラクター位置を更新します。
-     *
-     * TODO: Add more details or parameters description if needed.
      */
     private fun updateCharacterPositionBasedOnBearing(azimuth: Float) {
 
@@ -2617,7 +2691,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     }
 
     // --- 仮の保存関数（未定義の場合のみ） ---
-    private fun saveMarker(markerData: com.example.mapboxdemo2.model.MarkerData) {
+    private fun saveMarker(markerData: MarkerData) {
         lifecycleScope.launch(Dispatchers.IO) {
             // 1. DBへの挿入（バックグラウンド処理）
             database.markerDao().insert(markerData)
@@ -2632,23 +2706,25 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         }
     }
 
-    /**
-     * データベースから全てのマーカーを読み込み、地図上に表示します。
-     */
+
 
     /**
      * データベースから全てのマーカーを読み込み、地図上に表示します。
      * この処理はUIスレッドから呼ばれることを前提とします。
      */
-    // ↓↓↓↓ このメソッド全体を、正しいコードに置き換えます ↓↓↓↓
     private fun loadAndDisplayMarkers() {
         lifecycleScope.launch {
             val markers = withContext(Dispatchers.IO) {
                 database.markerDao().getAllMarkers()
             }
 
+            // ★ フィルタが指定されていればfilePathで絞り込み
+            val filteredMarkers = visibleMarkerFilePaths?.let { filterSet ->
+                markers.filter { it.filePath in filterSet }
+            } ?: markers
+
             // DBから読み込んだデータで、クラスが保持するFeatureリストを更新
-            currentMapFeatures = markers.map { markerData ->
+            currentMapFeatures = filteredMarkers.map { markerData ->
                 val point = Point.fromLngLat(markerData.longitude, markerData.latitude)
                 val properties = JsonObject().apply {
                     addProperty(MARKER_ICON_PROPERTY, markerData.filePath.substringBeforeLast('.'))
@@ -2726,7 +2802,7 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
      */
     private fun handleGridTap(point: Point) {
         if (isGridTapAnimationInProgress) return
-        val zoom = mapView.getMapboxMap().cameraState.zoom
+        val zoom = mapView.mapboxMap.cameraState.zoom
 
         // 5mグリッド(ズームレベル19以上)の場合は、これまで通りハイライトとバブルメニュー表示
         if (zoom >= 19.0) {
@@ -2778,9 +2854,6 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         }
     }
 
-    // ...クラスの最後の部分...
-
-    // ↓↓↓↓ ここから3つのメソッドを丸ごと追記 ↓↓↓↓
 
     /**
      * グリッド計算用の四隅の座標を保持するデータクラス
@@ -2923,11 +2996,8 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
     /**
      * 50m以上のグリッドがタップされた時の処理（範囲検索と一覧表示）
      */
-    /**
-     * 50m以上のグリッドがタップされた時の処理（範囲検索と一覧表示）
-     */
     private fun handleLargeGridTap(point: Point) {
-        val zoom = mapView.getMapboxMap().cameraState.zoom
+        val zoom = mapView.mapboxMap.cameraState.zoom
 
         // ↓↓↓↓ このwhenブロックを修正します ↓↓↓↓
         val gridSizeMeters = when {
@@ -2960,14 +3030,21 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
                 east = gridBounds.east,
                 west = gridBounds.west
             )
+
+            val filteredMarkers = visibleMarkerFilePaths?.let { visibleSet ->
+                markersInGrid.filter { it.filePath in visibleSet }
+            } ?: markersInGrid
+
             withContext(Dispatchers.Main) {
-                if (markersInGrid.isNotEmpty()) {
-                    showMarkersInGridDialog(markersInGrid)
+                // ↓↓↓↓ このif文の条件と、ダイアログに渡すリストを修正します ↓↓↓↓
+                if (filteredMarkers.isNotEmpty()) {
+                    // フィルター後のリストをダイアログに渡す
+                    showMarkersInGridDialog(filteredMarkers)
                 } else {
                     // マーカーがなければ、ハイライトも消す
                     highlightedGridPolygon = null
                     drawGridOverlay()
-                    Toast.makeText(requireContext(), "このグリッドに登録マーカーはありません", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), "このグリッドに表示可能なマーカーはありません", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -3016,7 +3093,9 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         }
     }
 
-    // 編集ダイアログの実装
+
+
+    // 編集ダイアログの実装（ギャラリー画像選択→DB画像選択ダイアログに変更）
     private fun showEditMarkerDialog(markerData: MarkerData) {
         val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_edit_regist_marker, null)
         val nameEdit = dialogView.findViewById<EditText>(R.id.edit_marker_name)
@@ -3025,10 +3104,13 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         val saveButton = dialogView.findViewById<Button>(R.id.button_save)
         val deleteButton = dialogView.findViewById<Button>(R.id.button_delete)
         val cancelButton = dialogView.findViewById<Button>(R.id.button_cancel)
+        val changeImageButton = dialogView.findViewById<Button>(R.id.button_change_image)
 
         nameEdit.setText(markerData.name)
         memoEdit.setText(markerData.memo)
-        // 画像表示
+        editedImageFilePath = markerData.filePath
+
+        // プレビュー画像表示
         val imageName = markerData.filePath.substringBeforeLast('.', markerData.filePath)
         val resId = requireContext().resources.getIdentifier(imageName, "drawable", requireContext().packageName)
         if (resId != 0) {
@@ -3041,10 +3123,25 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
             setContentView(dialogView)
         }
 
+        // --- 画像変更ボタン：DBから選択できるダイアログを表示 ---
+        changeImageButton.setOnClickListener {
+            showMarkerImagePickerDialog { selectedFilePath ->
+                editedImageFilePath = selectedFilePath
+                val imageName = selectedFilePath.substringBeforeLast('.', selectedFilePath)
+                val resId2 = requireContext().resources.getIdentifier(imageName, "drawable", requireContext().packageName)
+                if (resId2 != 0) {
+                    imageView.setImageResource(resId2)
+                } else {
+                    imageView.setImageResource(R.drawable.baseline_map_24)
+                }
+            }
+        }
+
         saveButton.setOnClickListener {
             val updatedMarker = markerData.copy(
                 name = nameEdit.text.toString(),
-                memo = memoEdit.text.toString()
+                memo = memoEdit.text.toString(),
+                filePath = editedImageFilePath ?: markerData.filePath
             )
             lifecycleScope.launch(Dispatchers.IO) {
                 database.markerDao().update(updatedMarker)
@@ -3081,15 +3178,48 @@ class MapFragment : Fragment(R.layout.fragment_map), PermissionsListener {
         dialog.show()
     }
 
-    /**
-     * 新しく保存された1件のマーカーを、既存のSymbolLayerに動的に追加する
-     */
-    // ↓↓↓↓ このメソッド全体を、正しいコードに置き換えます ↓↓↓↓
+    private fun showMarkerImagePickerDialog(onImageSelected: (String) -> Unit) {
+        val pickerDialog = BottomSheetDialog(requireContext())
+        val view = LayoutInflater.from(requireContext())
+            .inflate(R.layout.dialog_marker_image_picker, null)
+        val recyclerView = view.findViewById<RecyclerView>(R.id.imagePickerRecyclerView)
+
+        lifecycleScope.launch {
+            val markerList = withContext(Dispatchers.IO) {
+                database.downloadedMarkerDao().getAllDownloadedMarkers()
+            }
+            class ImageViewHolder(val imageView: ImageView) : RecyclerView.ViewHolder(imageView)
+
+            recyclerView.layoutManager = GridLayoutManager(requireContext(), 4)
+            recyclerView.adapter = object : RecyclerView.Adapter<ImageViewHolder>() {
+                override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ImageViewHolder {
+                    val iv = ImageView(parent.context)
+                    iv.layoutParams = ViewGroup.LayoutParams(160, 160)
+                    iv.scaleType = ImageView.ScaleType.CENTER_INSIDE
+                    return ImageViewHolder(iv)
+                }
+                override fun getItemCount(): Int = markerList.size
+                override fun onBindViewHolder(holder: ImageViewHolder, position: Int) {
+                    val marker = markerList[position]
+                    val imageName = marker.filePath.substringBeforeLast('.', marker.filePath)
+                    val resId = requireContext().resources.getIdentifier(imageName, "drawable", requireContext().packageName)
+                    (holder.imageView).setImageResource(if (resId != 0) resId else R.drawable.baseline_map_24)
+                    holder.imageView.setOnClickListener {
+                        onImageSelected(marker.filePath)
+                        pickerDialog.dismiss()
+                    }
+                }
+            }
+            pickerDialog.setContentView(view)
+            pickerDialog.show()
+        }
+    }
+
     /**
      * 新しく保存された1件のマーカーを、既存のSymbolLayerに動的に追加する
      */
     private fun addSingleMarkerToMap(markerData: MarkerData) {
-        val style = mapView.getMapboxMap().getStyle() ?: return
+        val style = mapView.mapboxMap.style ?: return
         val source = style.getSourceAs<GeoJsonSource>(MARKER_SOURCE_ID) ?: return
 
         // 新しいマーカーのGeoJSON Featureを作成

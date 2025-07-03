@@ -61,5 +61,19 @@
         android:text="写真から位置検索"
         android:layout_marginTop="16dp"/>
 
+    <!-- マーカー画像での絞り込み -->
+    <TextView
+        android:id="@+id/markerFilterLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="表示するマーカーを選択"
+        android:layout_marginTop="20dp" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/markerFilterRecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="160dp"
+        android:layout_marginTop="8dp"/>
+
 
 </LinearLayout>

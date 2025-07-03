@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 
 import kotlinx.coroutines.Dispatchers
 import com.example.mapboxdemo2.model.MarkerData
+import android.widget.Toast
 
 import android.util.Log
 
@@ -40,7 +41,23 @@ class RegistMarkerSettingsListFragment : Fragment() {
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
 
         adapter = MarkerSettingsAdapter(markerList) { item, isChecked ->
-            // トグルスイッチ変更時にDBとリストを更新
+
+            // スイッチをONにしようとした時の上限チェック
+            if (isChecked && markerList.count { it.isVisible } >= 8) {
+                Toast.makeText(requireContext(), "表示できるマーカーは8個までです", Toast.LENGTH_SHORT).show()
+                // アダプターに再描画を指示し、スイッチの見た目を強制的に元に戻す
+                adapter.notifyItemChanged(markerList.indexOf(item))
+                return@MarkerSettingsAdapter // ★ DB更新処理を行わずに、ここで処理を終了する
+            }
+
+            // スイッチをOFFにしようとした時の下限チェック
+            if (!isChecked && markerList.count { it.isVisible } <= 1) {
+                Toast.makeText(requireContext(), "最低1つはマーカーを表示する必要があります", Toast.LENGTH_SHORT).show()
+                adapter.notifyItemChanged(markerList.indexOf(item)) // スイッチを元に戻す
+                return@MarkerSettingsAdapter // ★ DB更新処理を行わずに、ここで処理を終了する
+            }
+
+            // バリデーションに問題がなければ、DBとリストを更新する
             viewLifecycleOwner.lifecycleScope.launch {
                 val db = AppDatabase.getDatabase(requireContext())
                 val updated = item.copy(isVisible = isChecked)
@@ -48,7 +65,6 @@ class RegistMarkerSettingsListFragment : Fragment() {
                 val idx = markerList.indexOfFirst { it.id == item.id }
                 if (idx != -1) {
                     markerList[idx] = updated
-                    adapter.notifyItemChanged(idx)
                 }
             }
         }

@@ -35,4 +35,14 @@ interface DownloadedMarkerDao {
 
     @Query("SELECT * FROM downloaded_markers ORDER BY displayOrder ASC")
     suspend fun getAllMarkers(): List<DownloadedMarker>
+
+    // DownloadedMarkerDao
+    @Dao
+    interface DownloadedMarkerDao {
+        @Query("SELECT * FROM downloaded_markers")
+        suspend fun getAllDownloadedMarkers(): List<DownloadedMarker>
+    }
+
+    @Query("SELECT * FROM downloaded_markers")
+    fun getAllDownloadedMarkers(): List<DownloadedMarker>
 }
